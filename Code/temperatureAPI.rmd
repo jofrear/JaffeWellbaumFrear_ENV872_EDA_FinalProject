@@ -1,0 +1,145 @@
+---
+title: "Temperature API"
+author: "Emma Wellbaum"
+date: "4/15/2021"
+output: pdf_document
+editor options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+getwd()
+options("noaakey" = Sys.getenv("noaakey"))
+
+#install.packages("rnoaa")
+
+library(rnoaa)
+library(purrr)
+library(lubridate)
+library(tidyverse)
+
+```
+
+## Create Variables for the Station IDs in Each State 
+
+
+```{r}
+df_stations <- ghcnd_stations()
+  
+df_stations <- ghcnd_stations() %>% 
+  filter(element %in% c('TMIN','TMAX','TAVG')) %>% 
+  filter(first_year <= 2010) %>%
+  filter(last_year == 2021) %>% 
+  filter(state %in% c('MA', 'ME', 'NC'))
+
+df_MAstations <- df_stations %>% 
+  filter(state == 'MA')
+MAstations <- unique(df_MAstations$id)
+
+df_MEstations <- df_stations %>% 
+  filter(state == 'ME')
+MEstations <- unique(df_MEstations$id)
+
+df_NCstations <- df_stations %>% 
+  filter(state == 'NC')
+NCstations <- unique(df_NCstations$id)
+
+```
+
+## Create a Scrape Function for State Temperature Data Based on Station ID
+
+```{r echo=FALSE}
+
+scrape.temp <- function(id) {
+  
+  df_temp <- meteo_tidy_ghcnd(stationid = id, 
+                   var = c('TMIN','TMAX'),
+                   date_min = "2010-01-01",
+                   date_max = "2021-04-15")
+
+  df_temp <- df_temp %>% 
+    mutate(Month = month(date),
+           Year = year(date),
+           TMIN_F = (tmin * 0.18 + 32),
+           TMAX_F = (tmax * .18 + 32),
+           AvgDailyTemp = ((TMIN_F + TMAX_F) / 2)) %>% 
+    group_by(Month, Year, id) %>% 
+    summarize(AvgMonthlyTemp = mean(AvgDailyTemp)) %>% 
+    arrange(Year, Month)
+  
+  return(df_temp)
+  
+}
+```
+
+```{r test.scrape.function, echo=FALSE, message=FALSE, warning=FALSE}
+df_testMA <- scrape.temp('USC00190120')
+```
+
+## MA Temperature Data
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+df_tempMA <- map(MAstations, scrape.temp) %>% bind_rows() 
+```
+
+```{r}
+df_tempMA <- merge(x=df_tempMA, 
+                   y=df_MAstations[, c('id','latitude','longitude','state','name')], 
+                   by='id', all.x = TRUE)
+
+write.csv(df_tempMA,
+          row.names = FALSE,
+          './Data/Raw/Massachusetts/MassTemperature20102021.csv')
+```
+
+## ME Temperature Data
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+df_tempME <- map(MEstations, scrape.temp) %>% bind_rows() 
+
+```
+
+```{r}
+df_tempME <- merge(x=df_tempME, 
+                   y=df_MEstations[, c('id','latitude','longitude','state','name')], 
+                   by='id', all.x = TRUE)
+
+df_tempME <- df_tempME %>% 
+  select(id, name, state, latitude, longitude, AvgMonthlyTemp, Month, Year)
+
+write.csv(df_tempME,
+          row.names = FALSE,
+          './Data/Raw/Maine/MaineTemperature20102021.csv')
+```
+
+## NC Temperature Data
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+df_tempNC <- map(NCstations, scrape.temp) %>% bind_rows() 
+```
+
+```{r}
+df_tempNC <- merge(x=df_tempNC, 
+                   y=df_NCstations[, c('id','latitude','longitude','state','name')], 
+                   by='id', all.x = TRUE)
+
+df_tempNC <- df_tempNC %>% 
+  select(id, name, state, latitude, longitude, AvgMonthlyTemp, Month, Year)
+
+write.csv(df_tempNC,
+          row.names = FALSE,
+          './Data/Raw/NorthCarolina/NCTemperature20102021.csv')
+```
+
+```{r}
+rwb <- read_ebd('./Data/Raw/Massachusetts/ebd_US-MA_rewbla_relFeb-2021/ebd_US-MA_rewbla_relFeb-2021.txt')
+
+rwb <- rwb %>% 
+  mutate(Year = year(observation_date)) %>% 
+  filter(Year %in% c(2010:2021)) 
+
+rwb <- rwb %>%
+  select(checklist_id, global_unique_identifier, taxonomic_order: observation_count, county_code, bcr_code, locality_id:protocol_code)
+
+write.csv(rwb, row.names = FALSE, './Data/Raw/Massachusetts/ebd_US-MA_rewbla_relFeb-2021/ebd_US-MA_rewbla_relFeb-2021.csv')
+```
+
