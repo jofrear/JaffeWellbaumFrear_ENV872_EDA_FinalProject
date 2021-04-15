@@ -130,16 +130,4 @@ write.csv(df_tempNC,
           './Data/Raw/NorthCarolina/NCTemperature20102021.csv')
 ```
 
-```{r}
-rwb <- read_ebd('./Data/Raw/Massachusetts/ebd_US-MA_rewbla_relFeb-2021/ebd_US-MA_rewbla_relFeb-2021.txt')
-
-rwb <- rwb %>% 
-  mutate(Year = year(observation_date)) %>% 
-  filter(Year %in% c(2010:2021)) 
-
-rwb <- rwb %>%
-  select(checklist_id, global_unique_identifier, taxonomic_order: observation_count, county_code, bcr_code, locality_id:protocol_code)
-
-write.csv(rwb, row.names = FALSE, './Data/Raw/Massachusetts/ebd_US-MA_rewbla_relFeb-2021/ebd_US-MA_rewbla_relFeb-2021.csv')
-```
 
