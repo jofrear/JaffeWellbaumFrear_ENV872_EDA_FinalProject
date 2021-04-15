@@ -1,49 +1,15 @@
 ---
-title: "Data_Exploration"
+title: "Maine_Cleaning_Data"
 author: "Joshua Frear"
 date: "4/15/2021"
 output: html_document
 ---
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-
-```
-
 ###
-Brainstorming Apr 15:
-
-1. Nail down species:
-Red-Winged Blackbird
-Osprey
-Wood Duck
-
-2. Time frame: 2010-2020
-
-TODO:
-
-Collect temperature data
-
-What specific analyses?
-Is there a trend?
-Time series would be interesting
-Comparing across locations, looking at the time
-
-
-###
-Temperature?
-Separate Temperature trend by state?
-If we want a column in the bird obs df of temp, we must find a relational connection.
-
-X number of observations by month/week by county
-
-Stacked graph with temperature trend and species count trend
-
-# of observations by month 
+This file is for taking the downloaded ebird data and processing it into summary files. 
 
 NOTE:
 
-I will use 4-letter AOU Bird Codes to refer to our species in R. For reference:
+I will use 4-letter AOU Bird Codes to refer to species in R. For reference:
 
 Red-winged Blackbird = RWBL
 Osprey = OSPR
@@ -57,23 +23,19 @@ library(auk)
 library(tidyr)
 library(dplyr)
 library(lubridate)
+library(ggplot2)
 
 getwd()
 
 #Import datasets, obtained from Ebird through a request on the website. 
-WODU_ME_ebd <- read_ebd("./Data/Raw/Maine/ebd_US-ME_wooduc_relFeb-2021/ebd_US-ME_wooduc_relFeb-2021.txt")
-RWBL_ME_ebd <- read_ebd("./Data/Raw/Maine/ebd_US-ME_rewbla1_relFeb-2021/ebd_US-ME_rewbla1_relFeb-2021.txt")
-OSPR_ME_ebd <- read_ebd("./Data/Raw/Maine/ebd_US-ME_osprey_relFeb-2021/ebd_US-ME_osprey_relFeb-2021.txt")
-
-unique(OSPR_ME_ebd$reason)
-unique(OSPR_ME_ebd$breeding_bird_atlas_code)
-
-unique(WODU_ME_ebd$reason)
-unique(RWBL_ME_ebd$reason)
+WODU_ME_ebd <- read_ebd("../Data/Raw/Maine/ebd_US-ME_wooduc_relFeb-2021/ebd_US-ME_wooduc_relFeb-2021.txt")
+RWBL_ME_ebd <- read_ebd("../Data/Raw/Maine/ebd_US-ME_rewbla_relFeb-2021/ebd_US-ME_rewbla_relFeb-2021.txt")
+OSPR_ME_ebd <- read_ebd("../Data/Raw/Maine/ebd_US-ME_osprey_relFeb-2021/ebd_US-ME_osprey_relFeb-2021.txt")
 
 ### Osprey ###
 
-#Remove rows that are not of interest
+#Remove columns that are not of interest
+#For the initial clean, I'm keeping variables related to effort
 OSPR_ME_ebd <- OSPR_ME_ebd %>% 
   select(common_name:observation_count, state, county, latitude:observation_date, protocol_type,duration_minutes:all_species_reported) 
 
@@ -82,21 +44,109 @@ OSPR_ME_ebd <- OSPR_ME_ebd %>%
 OSPR_ME_ebd$observation_count[OSPR_ME_ebd$observation_count == "X"] <- 1
 OSPR_ME_ebd$observation_count <- as.integer(OSPR_ME_ebd$observation_count)
 
-#Create a Month-Year column to group observations by
-#TODO WIP
-OSPR_ME_ebd$MonthYear <- my(OSPR_ME_ebd$observation_date)
+#Create column for year to remove old observations
+OSPR_ME_ebd$Year <- year(OSPR_ME_ebd$observation_date)
+#unique(OSPR_ME_ebd$Year)
+#Observations from before 2010 are included, so filter them out
+OSPR_ME_ebd <- OSPR_ME_ebd %>% filter(Year >= 2010)
 
-#Create a tidy dataframe with one row for the sum of birds seen in a given month-year
+#Turn observation date into a month-year by using floor_date()
+OSPR_ME_ebd$Month_Year <- floor_date(OSPR_ME_ebd$observation_date, unit = "month")
+
+#Create a summary dataframe with one row for the sum of birds seen in a given month-year
 #IE 25 Ospreys observed in February 2016
-OSPR_ME_tidy <- OSPR_ME_ebd %>% 
-  select(common_name:county, MonthYear)
-  group_by("Month-Year") %>% 
-  summarise(sum(observation_count))
-  
+OSPR_ME_month <- OSPR_ME_ebd %>% 
+  group_by(Month_Year) %>% 
+  dplyr::summarize(sum(observation_count)) %>% 
+  rename("Observations" = "sum(observation_count)") %>% 
+  mutate(Common_Name = "Osprey",
+         State = "Maine")
+
+plot1 <- ggplot(OSPR_ME_month, aes(x = Month_Year, y = Observations)) + geom_line() + 
+  geom_smooth(method = "loess", se = F)
+print(plot1)
+
 ### Wood Duck ###
-  
-  
-  
+
+#Remove columns that are not of interest
+WODU_ME_ebd <- WODU_ME_ebd %>% 
+  select(common_name:observation_count, state, county, latitude:observation_date, protocol_type,duration_minutes:all_species_reported) 
+
+#Ebird allows "presence" notations in counts with the character "X"
+#For our project, we will consider that as an observation of 1 bird.
+WODU_ME_ebd$observation_count[WODU_ME_ebd$observation_count == "X"] <- 1
+WODU_ME_ebd$observation_count <- as.integer(WODU_ME_ebd$observation_count)
+
+#Create column for year to remove old observations
+WODU_ME_ebd$Year <- year(WODU_ME_ebd$observation_date)
+#unique(WODU_ME_ebd$Year)
+#Observations from before 2010 are included, so filter them out
+WODU_ME_ebd <- WODU_ME_ebd %>% filter(Year >= 2010)
+
+#Turn observation date into a month-year by using floor_date()
+WODU_ME_ebd$Month_Year <- floor_date(WODU_ME_ebd$observation_date, unit = "month")
+
+#Create a summary dataframe with one row for the sum of birds seen in a given month-year
+WODU_ME_month <- WODU_ME_ebd %>% 
+  group_by(Month_Year) %>% 
+  dplyr::summarize(sum(observation_count)) %>% 
+  rename("Observations" = "sum(observation_count)") %>% 
+  mutate(Common_Name = "Wood Duck",
+         State = "Maine")
+
+plot2 <- ggplot(WODU_ME_month) + geom_line(aes(x = Month_Year, y = Observations))
+print(plot2)
+
 ### Red-Winged Blackbird ###
 
+#Remove columns that are not of interest
+#For the initial clean, I'm keeping variables related to effort
+RWBL_ME_ebd <- RWBL_ME_ebd %>% 
+  select(common_name:observation_count, state, county, latitude:observation_date, protocol_type,duration_minutes:all_species_reported) 
+
+#Ebird allows "presence" notations in counts with the character "X"
+#For our project, we will consider that as an observation of 1 bird.
+RWBL_ME_ebd$observation_count[RWBL_ME_ebd$observation_count == "X"] <- 1
+RWBL_ME_ebd$observation_count <- as.integer(RWBL_ME_ebd$observation_count)
+
+#Create column for year to remove old observations
+RWBL_ME_ebd$Year <- year(RWBL_ME_ebd$observation_date)
+#unique(RWBL_ME_ebd$Year)
+#Observations from before 2010 are included, so filter them out
+RWBL_ME_ebd <- RWBL_ME_ebd %>% filter(Year >= 2010)
+
+#Turn observation date into a month-year by using floor_date()
+RWBL_ME_ebd$Month_Year <- floor_date(RWBL_ME_ebd$observation_date, unit = "month")
+
+#Create a summary dataframe with one row for the sum of birds seen in a given month-year
+RWBL_ME_month <- RWBL_ME_ebd %>% 
+  group_by(Month_Year) %>% 
+  dplyr::summarize(sum(observation_count)) %>% 
+  rename("Observations" = "sum(observation_count)") %>% 
+  mutate(Common_Name = "Red-Winged Blackbird",
+         State = "Maine")
+
+plot3 <- ggplot(RWBL_ME_month, aes(x = Month_Year, y = Observations)) + geom_line() + 
+  geom_smooth(method = "loess", se = F)
+print(plot3)
+
+#write summary csv files to project folder
+write.csv(OSPR_ME_month, file = "../Data/Processed/Maine/OSPR_ME_month.csv")
+write.csv(WODU_ME_month, file = "../Data/Processed/Maine/WODU_ME_month.csv")
+write.csv(RWBL_ME_month, file = "../Data/Processed/Maine/RWBL_ME_month.csv")
+
 ```
+
+Data Challenges: Cannot account for effort. While some checklists do include distance traveled and time spent observing, we are not able to download checklists without observations of a species for negative data.
+
+The plots show increasing numbers over time, but this is probably due to more checklists. We could divide observations by # of checklists in a month, but how many checklists are submitted with zero of a given species?
+
+TODO:
+
+Collect temperature data and add to summary csv files.
+Isolate and remove trend from increasing ebird use.
+Make stacked graph with temperature trend and species count trend.
+
+Making the project more fine-grained:
+Summarize by county, not state
+Summarize by week of year, not month
