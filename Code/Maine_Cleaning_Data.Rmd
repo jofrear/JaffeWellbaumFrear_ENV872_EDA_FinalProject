@@ -1,0 +1,102 @@
+---
+title: "Data_Exploration"
+author: "Joshua Frear"
+date: "4/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+###
+Brainstorming Apr 15:
+
+1. Nail down species:
+Red-Winged Blackbird
+Osprey
+Wood Duck
+
+2. Time frame: 2010-2020
+
+TODO:
+
+Collect temperature data
+
+What specific analyses?
+Is there a trend?
+Time series would be interesting
+Comparing across locations, looking at the time
+
+
+###
+Temperature?
+Separate Temperature trend by state?
+If we want a column in the bird obs df of temp, we must find a relational connection.
+
+X number of observations by month/week by county
+
+Stacked graph with temperature trend and species count trend
+
+# of observations by month 
+
+NOTE:
+
+I will use 4-letter AOU Bird Codes to refer to our species in R. For reference:
+
+Red-winged Blackbird = RWBL
+Osprey = OSPR
+Wood Duck = WODU
+
+(https://www.birdpop.org/pages/birdSpeciesCodes.php)
+
+```{r Data Tidying}
+#install.packages("auk")
+library(auk)
+library(tidyr)
+library(dplyr)
+library(lubridate)
+
+getwd()
+
+#Import datasets, obtained from Ebird through a request on the website. 
+WODU_ME_ebd <- read_ebd("./Data/Raw/Maine/ebd_US-ME_wooduc_relFeb-2021/ebd_US-ME_wooduc_relFeb-2021.txt")
+RWBL_ME_ebd <- read_ebd("./Data/Raw/Maine/ebd_US-ME_rewbla1_relFeb-2021/ebd_US-ME_rewbla1_relFeb-2021.txt")
+OSPR_ME_ebd <- read_ebd("./Data/Raw/Maine/ebd_US-ME_osprey_relFeb-2021/ebd_US-ME_osprey_relFeb-2021.txt")
+
+unique(OSPR_ME_ebd$reason)
+unique(OSPR_ME_ebd$breeding_bird_atlas_code)
+
+unique(WODU_ME_ebd$reason)
+unique(RWBL_ME_ebd$reason)
+
+### Osprey ###
+
+#Remove rows that are not of interest
+OSPR_ME_ebd <- OSPR_ME_ebd %>% 
+  select(common_name:observation_count, state, county, latitude:observation_date, protocol_type,duration_minutes:all_species_reported) 
+
+#Ebird allows "presence" notations in counts with the character "X"
+#For our project, we will consider that as an observation of 1 bird.
+OSPR_ME_ebd$observation_count[OSPR_ME_ebd$observation_count == "X"] <- 1
+OSPR_ME_ebd$observation_count <- as.integer(OSPR_ME_ebd$observation_count)
+
+#Create a Month-Year column to group observations by
+#TODO WIP
+OSPR_ME_ebd$MonthYear <- my(OSPR_ME_ebd$observation_date)
+
+#Create a tidy dataframe with one row for the sum of birds seen in a given month-year
+#IE 25 Ospreys observed in February 2016
+OSPR_ME_tidy <- OSPR_ME_ebd %>% 
+  select(common_name:county, MonthYear)
+  group_by("Month-Year") %>% 
+  summarise(sum(observation_count))
+  
+### Wood Duck ###
+  
+  
+  
+### Red-Winged Blackbird ###
+
+```
