@@ -1,0 +1,122 @@
+---
+title: "R Notebook"
+output: pdf_document
+author: "Cate Jaffe"
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup}
+
+# Library
+library(tidyverse)
+library(ggplot2)
+library(auk)
+library(lubridate)
+library(colormap)
+library(ggridges)
+
+# set wd
+knitr::opts_knit$set( root.dir = 
+                        "/Users/Kate/Documents/1.Spring 2021/JaffeWellbaumFrear_ENV872_EDA_FinalProject",
+                  tidy.opts = list(width.cutoff = 60),
+                  tidy = TRUE)
+getwd()
+
+# ggplot theme
+mytheme <- theme_classic( base_size = 14) + 
+  theme( axis.text = element_text( color = "#222222ff"),
+         legend.position = "top",
+         # remove legend title
+         legend.title = element_blank(),
+         # margins (top,right,bottom,left)
+         axis.title.x = element_text( color = "black",
+                                    margin = margin(20,0,0,0)),
+         axis.title.y = element_text( color = "black",
+                                    margin = margin(0,20,0,0)))
+theme_set(mytheme)
+
+# import bird data
+# eBird data is in text format, package "auk" used to convert to dataframe
+woodduck <- read_ebd("./Data/Raw/NorthCarolina/ebd_US-NC_wooduc_relFeb-2021/ebd_US-NC_wooduc_relFeb-2021.txt")
+rwbbird <- read_ebd("./Data/Raw/NorthCarolina/ebd_US-NC_rewbla_relMar-2021/ebd_US-NC_rewbla_relMar-2021.txt")
+osprey <- read_ebd("./Data/Raw/NorthCarolina/ebd_US-NC_osprey_relFeb-2021/ebd_US-NC_osprey_relFeb-2021.txt")
+
+# import weather data
+weather <- read.csv("./Data/Raw/NorthCarolina/NCTemperature20102021.csv")
+
+```
+
+
+```{r bird data clean}
+
+# create merged dataset of all bird data
+allBirds <- bind_rows(woodduck, rwbbird, osprey)
+
+### clean
+allBirds <- allBirds %>%
+  # filter dates to date range of interest: 2010 - 2021
+  filter(year(observation_date) > 2009 & year(observation_date) < 2022) %>%
+  # select only columns of interest
+  select(common_name:observation_count, state, county,
+                                      latitude:time_observations_started, protocol_type,
+                                      duration_minutes:number_observers,
+                                      all_species_reported) %>% 
+    # change "X" value in observation_count to 1 (X represents "present" in eBird)
+    # change to numeric variable after converting to X
+    mutate(observation_count = as.numeric(replace(observation_count, observation_count == 'X', '1')),
+           # add column for "month-year" using floor_date from lubridate
+           Year_Month = format(as.Date(observation_date), "%Y-%m"),
+           # add binary presence column
+           Presence = 1
+    )
+
+
+
+### Create grouped dataset
+allBirds_YMgrouped <- 
+  allBirds %>%
+  group_by(common_name, Year_Month) %>% 
+  summarize(observation_count_sum = sum(observation_count),
+            presence_count = sum(Presence)) 
+
+
+```
+
+```{r exploratory plots}
+
+### Birds, ungrouped
+# basic density plot across all years, faceted 
+ggplot(allBirds, aes(x = observation_date, fill = common_name, color = common_name)) +
+  geom_density(alpha = .2) + 
+  facet_wrap(vars(common_name), nrow = 1, ncol = 3) + 
+  theme( legend.position = "none")
+
+# basic density plot across all years, unfaceted 
+ggplot(allBirds, aes(x = observation_date, fill = common_name, color = common_name)) +
+  geom_density(alpha = .2)
+
+# as a ridgeplot
+ggplot(allBirds, aes(x = observation_date, y = common_name, fill = common_name, color = common_name)) + 
+  geom_density_ridges(alpha = .8) 
+
+# crazy looking ridgeplot for all counties
+ggplot(allBirds, aes(x = observation_date, y = county, fill = common_name, color = common_name)) + 
+  geom_density_ridges(alpha = .8) + 
+  facet_wrap(vars(common_name), nrow = 1, ncol = 3) + 
+  theme( axis.text.y = element_text(size = 6))
+
+### Birds, grouped
+ggplot(allBirds_YMgrouped, aes(x = Year, fill = common_name, color = common_name)) +
+  geom_density(alpha = .2)
+
+### Temperature
+
+  
+
+
+```
+
+
+
+
