@@ -1,0 +1,308 @@
+---
+title: "R Notebook"
+output: pdf_document
+author: "Cate Jaffe"
+editor_options:
+  chunk_output_type: console
+---
+### Setup
+```{r setup}
+# Library
+library(tidyverse)
+library(ggplot2)
+library(auk)
+#install.packages("lubridate")
+library(lubridate)
+library(colormap)
+library(ggridges)
+library(RColorBrewer)
+
+# set wd
+knitr::opts_knit$set( root.dir = 
+                        "/Users/Kate/Documents/1.Spring 2021/JaffeWellbaumFrear_ENV872_EDA_FinalProject",
+                  tidy.opts = list(width.cutoff = 60),
+                  tidy = TRUE)
+getwd()
+
+# ggplot theme
+mytheme <- theme_classic( base_size = 14) + 
+  theme( axis.text = element_text( color = "#222222ff"),
+         legend.position = "top",
+         # remove legend title
+         legend.title = element_blank(),
+         # margins (top,right,bottom,left)
+         axis.title.x = element_text( color = "black",
+                                    margin = margin(20,0,0,0)),
+         axis.title.y = element_text( color = "black",
+                                    margin = margin(0,20,0,0)))
+theme_set(mytheme)
+```
+
+# Import Data
+```{r data import}
+# import bird data
+# eBird data is in text format, package "auk" used to convert to dataframe
+woodduck <- read_ebd("./Data/Raw/NorthCarolina/ebd_US-NC_wooduc_relFeb-2021/ebd_US-NC_wooduc_relFeb-2021.txt")
+rwbbird <- read_ebd("./Data/Raw/NorthCarolina/ebd_US-NC_rewbla_relMar-2021/ebd_US-NC_rewbla_relMar-2021.txt")
+osprey <- read_ebd("./Data/Raw/NorthCarolina/ebd_US-NC_osprey_relFeb-2021/ebd_US-NC_osprey_relFeb-2021.txt")
+
+# import weather data
+weather <- read.csv("./Data/Raw/NorthCarolina/NCTemperature20102021.csv") %>% unique()
+
+```
+
+# Data Cleaning
+```{r bird data clean}
+
+# create merged dataset of all bird data
+allBirds <- bind_rows(woodduck, rwbbird, osprey)
+
+### clean
+allBirds <- allBirds %>%
+  # filter dates to date range of interest: 2010 - 2021
+  filter(year(observation_date) > 2009 & year(observation_date) < 2022) %>%
+  # select only columns of interest
+  select(common_name:observation_count, state, county,
+                                      latitude:time_observations_started, protocol_type,
+                                      duration_minutes:number_observers,
+                                      all_species_reported) %>% 
+    # change "X" value in observation_count to 1 (X represents "present" in eBird)
+    # change to numeric variable after converting to X
+    mutate(observation_count = as.numeric(replace(observation_count, observation_count == 'X', '1')),
+           # add column which divides # observations per minute observation
+           # this controls for birding "effort" which was much higher in later years (2015-2020)
+           observations_per_min = observation_count/duration_minutes,
+           # add column for "month-year" using floor_date from lubridate
+           Year_Month = floor_date(observation_date, unit = "month"),
+           # add binary presence column
+           Presence = 1
+    )
+
+# what is the distribution of the new "observations per minute" variable?
+summary(allBirds$observations_per_min)
+
+# create version of dataset with Inf and NA values of "observations_per_min" excluded
+# made this a separate dataset because rows where the observation duration was missing or 0
+# created values of NA and Inf. 
+#Removing these NA and Inf values removed about 10,000 observations, or ~6% of the data.
+allBirds_obvPerMin <- allBirds %>% 
+  filter( is.na(observations_per_min) == FALSE) %>% 
+  filter( observations_per_min != Inf)
+# check final dataset
+summary(allBirds_obvPerMin$observations_per_min)
+# looks good, might be some large outliers.
+
+
+### Create grouped dataset
+allBirds_YMgrouped <- 
+  allBirds %>%
+  group_by(common_name, Year_Month) %>% 
+  summarize(state = first(state),
+            observation_count_sum = sum(observation_count),
+            presence_count = sum(Presence)
+            ) 
+# observations per minute (OPM)
+allBirds_YMgrouped_OPM <- 
+  allBirds_obvPerMin %>%
+  group_by(common_name, Year_Month) %>% 
+  summarize(state = first(state),
+            observation_count_sum = sum(observation_count),
+            presence_count = sum(Presence),
+            observation_per_min_avg = mean(observations_per_min)
+            ) 
+
+
+
+```
+
+```{r weather data clean}
+
+# group by month & year
+weather_YM <- weather %>% 
+  # omit NAs
+  na.omit() %>% 
+  # make Year-Month column
+  mutate( Year_Month = ydm((paste0(Year,"-01-",Month)))) %>% 
+  group_by(Year_Month) %>% 
+  # take statewide average
+  summarise(AvgMonthlyTemp_Statewide = mean(AvgMonthlyTemp))
+
+  
+```
+
+# Data Exploration
+```{r bird exploratory plots}
+
+### Birds, ungrouped
+# basic density plot across all years, faceted 
+ggplot(allBirds, aes(x = observation_date, fill = common_name, color = common_name)) +
+  geom_density(alpha = .2) + 
+  facet_wrap(vars(common_name), nrow = 1, ncol = 3) + 
+  theme( legend.position = "none")
+
+# basic density plot of observations across all years, unfaceted 
+ggplot(allBirds, aes(x = observation_date, fill = common_name, color = common_name)) +
+  geom_density(alpha = .2)
+
+# as a ridgeplot
+ggplot(allBirds, aes(x = observation_date, y = common_name, fill = common_name, color = common_name)) + 
+  geom_density_ridges(alpha = .8) 
+
+# crazy looking ridgeplot for all counties
+ggplot(allBirds, aes(x = observation_date, y = county, fill = common_name, color = common_name)) + 
+  geom_density_ridges(alpha = .8) + 
+  facet_wrap(vars(common_name), nrow = 1, ncol = 3) + 
+  theme( axis.text.y = element_text(size = 6))
+
+### Bird Presence (# of times it appeared on checklist), monthly 
+# uses grouped data
+ggplot(allBirds_YMgrouped, aes(x = Year_Month, y = presence_count, group = common_name, color = common_name)) +
+  geom_line(alpha = .8) 
+
+
+```
+
+```{r temperature exploratory plots}
+
+# Temperature trend distributions by year, ungrouped
+ggplot(weather, aes(x = AvgMonthlyTemp, y = as.factor(Year))) +
+  geom_density_ridges(alpha = .8, fill = "lightblue")
+  # Note incomplete data for 2021.
+
+# Temperature trends by year-month groups
+ggplot(weather_YM, aes(x = Year_Month, y = AvgMonthlyTemp_Statewide, color = AvgMonthlyTemp_Statewide)) +
+  geom_point(alpha = .4) +
+  geom_line(alpha = .8) + 
+  scale_x_date(breaks = "6 months",
+                date_labels = "%b %Y") + 
+  theme(axis.text.x = element_text(angle = 45,
+                                   hjust = 1)) + 
+  scale_color_colormap(colormap = "temperature") + 
+  theme(legend.position = "none")
+  # Note incomplete data for 2021. 
+
+
+```
+
+```{r join temp and bird data}
+
+birdsWeather_YM <- full_join(allBirds_YMgrouped, weather_YM, 
+                             by = "Year_Month") %>% 
+  mutate(Month = month(Year_Month),
+         Year = year(Year_Month))
+
+# with Observations per minute variable
+birdsWeather_YM_OPM <- full_join(allBirds_YMgrouped_OPM, weather_YM, 
+                             by = "Year_Month") %>% 
+  mutate(Month = month(Year_Month),
+         Year = year(Year_Month))
+
+```
+
+### Analysis: Bird Observations & Temperature
+
+```{r Plots}
+
+
+# presence count by date, colored by temperature
+ggplot(birdsWeather_YM, aes(x = Year_Month,
+                            y = presence_count,
+                            color = AvgMonthlyTemp_Statewide)) + 
+  geom_point() + 
+  scale_color_colormap(colormap = "temperature") +
+  facet_wrap(vars(common_name))
+
+# same as above, using observations per minute instead
+ggplot(birdsWeather_YM_OPM, aes(x = Year_Month,
+                            y = observation_per_min_avg,
+                            color = AvgMonthlyTemp_Statewide)) + 
+  geom_point() + 
+  scale_color_colormap(colormap = "temperature") +
+  facet_wrap(vars(common_name)) + 
+  scale_y_log10()
+
+# presence count by temperature
+ggplot(birdsWeather_YM, aes(x = AvgMonthlyTemp_Statewide,
+                            y = presence_count)) + 
+  geom_point(aes(color = factor(Month))) + 
+  geom_smooth(method = "lm", se = FALSE) + 
+  facet_wrap(vars(common_name)) + 
+  labs(y = "Number of Times Bird Appeared in a Checklist",
+       x = "Average Temperature (F), Statewide") 
+
+# same as above, using observations per minute instead
+ggplot(birdsWeather_YM_OPM, aes(x = AvgMonthlyTemp_Statewide,
+                            y = observation_per_min_avg)) + 
+  geom_point(aes(color = factor(Month))) + 
+  geom_smooth(method = "lm", se = FALSE) + 
+  facet_wrap(vars(common_name)) + 
+  labs(y = "Average Observations per Minute of Observation (log10)",
+       x = "Average Temperature (F), Statewide") +
+  scale_y_log10()
+
+### presence count by temperature, visualized by month
+ggplot(birdsWeather_YM, aes(x = AvgMonthlyTemp_Statewide,
+                            y = presence_count,
+                            color = common_name)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE) + 
+  facet_wrap(vars(Month),
+             scales = "free") + 
+  labs(y = "Number of Times Bird Appeared in a Checklist",
+       x = "Average Temperature (F), Statewide") 
+
+# interpretation of plot: 
+# In years where average temperatures in June were higher, the bird species of interest appeared on June checklists fewer times (strongest for osprey and RWBB). Compare to October: where years in which October had higher temperatures appear to correspond to more observations of all three bird species in October. This potential trend is less pronounced in summer (july, august) and winter (december).
+
+# potential complications:
+# the months with higher temperatures may also have happened to be months in the earlier or later time period of study. If this is the case, it would complicate results as there were more birders submitting observations over time - i.e. later years are likely to have more observations of all three bird species.
+
+### plot as above (presence count by temperature, visualized by month) with observations per minute
+ggplot(birdsWeather_YM_OPM, aes(x = AvgMonthlyTemp_Statewide,
+                            y = observation_per_min_avg,
+                            color = common_name)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE) + 
+  facet_wrap(vars(Month),
+             scales = "free") + 
+  labs(y = "Average Observations per Minute of Observation (log10)",
+       x = "Average Temperature (F), Statewide") + 
+  scale_y_log10()
+
+# In this plot, I've controlled for the skew introduced by more eBird observations being made in the later half of the study period. In April, we see that Wood Ducks (but not the other species) declined in observations (relative to effort) in years where April was warmer. Conversely, more Wood Ducks were observed (per minute of observation) in June during years with warmer June temperatures.
+
+
+
+```
+
+
+### Analysis: Annual Arrival and Departure Dates
+```{r create table to examine arrival and departure dates}
+
+# start with raw data
+# group by year
+#summarise:
+# find first date
+# find last date
+
+
+```
+
+# color reference
+
+```{r color ref, eval=FALSE, include=FALSE}
+
+# R Brewer Reference
+display.brewer.all()
+
+# Colormap
+scales::show_col(colormap(colormap = colormaps$temperature))
+
+
+```
+
+
+
+
+
+
