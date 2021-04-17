@@ -1,0 +1,103 @@
+---
+title: "Massachusetts_Cleaning_Data.Rmd"
+author: "Emma Wellbaum"
+date: "4/17/2021"
+output: html_document
+---
+###
+This file is for taking the downloaded ebird data and processing it into summary files. 
+
+NOTE:
+
+I will use 4-letter AOU Bird Codes to refer to species in R. For reference:
+
+Red-winged Blackbird = RWBL
+Osprey = OSPR
+Wood Duck = WODU
+
+(https://www.birdpop.org/pages/birdSpeciesCodes.php)
+
+## Set up
+
+```{r setup}
+getwd()
+
+#install.packages("auk")
+library(auk)
+library(tidyr)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+
+```
+
+## Osprey (OSPR)
+
+```{r echo=FALSE}
+# Import data downloaded from eBird and filter for columns and rows of interest
+OSPR_MA_ebd <- read_ebd(
+  "./Data/Raw/Massachusetts/ebd_US-MA_osprey_relFeb-2021/ebd_US-MA_osprey_relFeb-2021.txt") %>%
+  select(common_name:observation_count, state, county, latitude:observation_date, protocol_type,duration_minutes:all_species_reported) %>% 
+  mutate(Month = month(observation_date),
+         Year = year(observation_date)) %>% 
+  filter(Year %in% c(2010:2021)) %>%
+  arrange(Year, Month)
+
+#Convert "presence" notations (symbolized with an "X") to observations of 1 bird
+OSPR_MA_ebd$observation_count[OSPR_MA_ebd$observation_count == "X"] <- 1
+OSPR_MA_ebd$observation_count <- as.integer(OSPR_MA_ebd$observation_count)
+
+#Create a summary dataframe for the number of observations in each month
+OSPR_MA_month <- OSPR_MA_ebd %>% 
+  group_by(Date) %>% 
+  summarize(Observations = sum(observation_count)) %>% 
+  mutate(Common_Name = "Osprey",
+         State = "Massachusetts")
+```
+
+## Red-Winged Blackbird (RWBL)
+```{r}
+# Import data downloaded from eBird and filter for columns and rows of interest
+RWBL_MA_ebd <- read_ebd(
+  "./Data/Raw/Massachusetts/ebd_US-MA_rewbla_201001_202102_relMar-2021/ebd_US-MA_rewbla_201001_202102_relMar-2021.txt") %>%
+  select(common_name:observation_count, state, county, latitude:observation_date, protocol_type,duration_minutes:all_species_reported) %>% 
+  mutate(Month = as.Date(month(observation_date)),
+         Year = as.Date(year(observation_date))) %>% 
+  filter(Year %in% c(2010:2021)) %>%
+  arrange(Year, Month)
+
+#Convert "presence" notations (symbolized with an "X") to observations of 1 bird
+RWBL_MA_ebd$observation_count[RWBL_MA_ebd$observation_count == "X"] <- 1
+RWBL_MA_ebd$observation_count <- as.integer(RWBL_MA_ebd$observation_count)
+
+#Create a summary dataframe for the number of observations in each month
+RWBL_MA_month <- RWBL_MA_ebd %>% 
+  group_by(Year, Month) %>% 
+  summarize(Observations = sum(observation_count)) %>% 
+  mutate(Common_Name = "Red-Winged Blackbird",
+         State = "Massachusetts")
+```
+
+## Wood Duck (WODU)
+```{r}
+# Import data downloaded from eBird and filter for columns and rows of interest
+WODU_MA_ebd <- read_ebd(
+  "./Data/Raw/Massachusetts/ebd_US-MA_wooduc_relFeb-2021/ebd_US-MA_wooduc_relFeb-2021.txt") %>%
+  select(common_name:observation_count, state, county, latitude:observation_date, protocol_type,duration_minutes:all_species_reported) %>% 
+  mutate(Month = month(observation_date),
+         Year = year(observation_date)) %>% 
+  filter(Year %in% c(2010:2021)) %>%
+  arrange(Year, Month)
+
+#Convert "presence" notations (symbolized with an "X") to observations of 1 bird
+WODU_MA_ebd$observation_count[WODU_MA_ebd$observation_count == "X"] <- 1
+WODU_MA_ebd$observation_count <- as.integer(WODU_MA_ebd$observation_count)
+
+#Create a summary dataframe for the number of observations in each month
+WODU_MA_month <- WODU_MA_ebd %>% 
+  group_by(Date) %>% 
+  summarize(Observations = sum(observation_count)) %>% 
+  mutate(Common_Name = "Wood Duck",
+         State = "Massachusetts")
+```
+
