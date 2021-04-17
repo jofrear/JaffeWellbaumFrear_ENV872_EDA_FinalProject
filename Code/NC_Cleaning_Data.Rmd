@@ -276,17 +276,43 @@ ggplot(birdsWeather_YM_OPM, aes(x = AvgMonthlyTemp_Statewide,
 ```
 
 
-### Analysis: Annual Arrival and Departure Dates
+### Analysis: Date of First and Last Annual Observations
 ```{r create table to examine arrival and departure dates}
 
-# start with raw data
-# group by year
-#summarise:
-# find first date
-# find last date
+# start with raw data: allBirds
+allBirds_FirstLast <- 
+  allBirds %>% 
+  # group by species, year
+  group_by(common_name, year(Year_Month)) %>%
+  # first is the earliest date bird is observed
+  summarize(first_date = min(observation_date),
+            # last date is latest 
+            last_date = max(observation_date)) %>% 
+  rename("Year" = "year(Year_Month)")
+
+# pivot longer to plot both first and last date
+allBirds_FirstLast_piv <- pivot_longer(allBirds_FirstLast,
+                                   cols = c("first_date", "last_date"),
+                                   names_to = "first_or_last",
+                                   values_to = "date"
+                                   ) %>% 
+  mutate(Day = day(date))
 
 
 ```
+
+```{r Plot first and last observation dates}
+
+ggplot(allBirds_FirstLast_piv, aes(x = Year, y = Day, color = first_or_last)) + 
+  geom_point() + 
+  geom_line() + 
+  facet_wrap(vars(common_name))
+
+
+```
+
+
+
 
 # color reference
 
