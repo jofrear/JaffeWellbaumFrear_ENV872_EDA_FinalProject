@@ -17,7 +17,7 @@ Wood Duck = WODU
 
 (https://www.birdpop.org/pages/birdSpeciesCodes.php)
 
-```{r Data Tidying}
+```{r Load.and.Tidy.Data}
 #install.packages("auk")
 library(auk)
 library(tidyr)
@@ -94,7 +94,8 @@ WODU_ME_month <- WODU_ME_ebd %>%
   mutate(Common_Name = "Wood Duck",
          State = "Maine")
 
-plot2 <- ggplot(WODU_ME_month) + geom_line(aes(x = Month_Year, y = Observations))
+plot2 <- ggplot(WODU_ME_month, aes(x = Month_Year, y = Observations)) + geom_line() + 
+  geom_smooth(method = "loess", se = F)
 print(plot2)
 
 ### Red-Winged Blackbird ###
@@ -129,11 +130,7 @@ RWBL_ME_month <- RWBL_ME_ebd %>%
 plot3 <- ggplot(RWBL_ME_month, aes(x = Month_Year, y = Observations)) + geom_line() + 
   geom_smooth(method = "loess", se = F)
 print(plot3)
-
-#write summary csv files to project folder
-write.csv(OSPR_ME_month, file = "../Data/Processed/Maine/OSPR_ME_month.csv")
-write.csv(WODU_ME_month, file = "../Data/Processed/Maine/WODU_ME_month.csv")
-write.csv(RWBL_ME_month, file = "../Data/Processed/Maine/RWBL_ME_month.csv")
+ggsave("RWBL_ME_month.png")
 
 ```
 
@@ -150,3 +147,49 @@ Make stacked graph with temperature trend and species count trend.
 Making the project more fine-grained:
 Summarize by county, not state
 Summarize by week of year, not month
+
+```{r Add.Temperature.Data}
+
+Maine_Temps <- read.csv("../Data/Raw/Maine/MaineTemperature20102021.csv")
+Maine_Temps <- Maine_Temps[!duplicated(Maine_Temps), ]
+
+Maine_Temps$Month_Year <- paste0(Maine_Temps$Month,"-",Maine_Temps$Year)
+Maine_Temps$Month_Year <- my(Maine_Temps$Month_Year)
+
+Maine_Temps_Statewide <- Maine_Temps %>% drop_na() %>% 
+  group_by(Month_Year) %>% 
+   dplyr::summarize(mean(AvgMonthlyTemp)) %>% 
+  rename("Mean_Temperature" = "mean(AvgMonthlyTemp)")
+
+RWBL_ME_month <- full_join(Maine_Temps_Statewide, RWBL_ME_month, by = "Month_Year")
+OSPR_ME_month <- full_join(Maine_Temps_Statewide, OSPR_ME_month, by = "Month_Year")
+WODU_ME_month <- full_join(Maine_Temps_Statewide, WODU_ME_month, by = "Month_Year")
+
+plot4 <- ggplot(RWBL_ME_month, aes(x = Month_Year, y = Observations, color = Mean_Temperature)) + 
+  geom_point()
+  
+print(plot4)
+
+#write summary csv files to project folder
+write.csv(OSPR_ME_month, file = "../Data/Processed/Maine/OSPR_ME_month.csv")
+write.csv(WODU_ME_month, file = "../Data/Processed/Maine/WODU_ME_month.csv")
+write.csv(RWBL_ME_month, file = "../Data/Processed/Maine/RWBL_ME_month.csv")
+```
+
+```{r Find.First.Last.Obs.Dates}
+
+#use min and max
+
+OSPR_ME_dates <- OSPR_ME_ebd %>% 
+  group_by(year(Month_Year)) %>% 
+  summarize(FirstObs = min(observation_date), LastObs = max(observation_date))
+
+WODU_ME_dates <- WODU_ME_ebd %>% 
+  group_by(year(Month_Year)) %>% 
+  summarize(FirstObs = min(observation_date), LastObs = max(observation_date))
+
+RWBL_ME_dates <- RWBL_ME_ebd %>% 
+  group_by(year(Month_Year)) %>% 
+  summarize(FirstObs = min(observation_date), LastObs = max(observation_date))
+
+```
