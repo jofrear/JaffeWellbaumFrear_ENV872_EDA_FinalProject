@@ -192,4 +192,9 @@ RWBL_ME_dates <- RWBL_ME_ebd %>%
   group_by(year(Month_Year)) %>% 
   summarize(FirstObs = min(observation_date), LastObs = max(observation_date))
 
+#write summary csv files to project folder
+write.csv(OSPR_ME_dates, file = "../Data/Processed/Maine/OSPR_ME_firstlast.csv")
+write.csv(WODU_ME_dates, file = "../Data/Processed/Maine/WODU_ME_firstlast.csv")
+write.csv(RWBL_ME_dates, file = "../Data/Processed/Maine/RWBL_ME_firstlast.csv")
+
 ```
