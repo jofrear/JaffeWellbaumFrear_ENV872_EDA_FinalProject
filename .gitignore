@@ -28,5 +28,3 @@ vignettes/*.pdf
 .Renviron
 # zip versions of raw data
 *.zip
-# Raw RWBL data over 100MB
-*MA_rewbla_201001_202102_relMar-2021.txt
