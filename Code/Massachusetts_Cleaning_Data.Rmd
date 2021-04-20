@@ -3,7 +3,10 @@ title: "Massachusetts_Cleaning_Data.Rmd"
 author: "Emma Wellbaum"
 date: "4/17/2021"
 output: html_document
+editor_options:
+  chunk_output_type: console
 ---
+
 ###
 This file is for taking the downloaded ebird data and processing it into summary files. 
 
@@ -19,7 +22,7 @@ Wood Duck = WODU
 
 ## Set up
 
-```{r setup}
+```{r setup, include=FALSE}
 getwd()
 
 #install.packages("auk")
@@ -28,6 +31,8 @@ library(tidyr)
 library(dplyr)
 library(lubridate)
 library(ggplot2)
+library(viridis)
+library(cowplot)
 
 ```
 
@@ -47,18 +52,17 @@ MA_temp_state <- MA_temp %>%
   summarize(AvgMonthlyTemp_F = mean(AvgMonthlyTemp))
 ```
 
-## Osprey (OSPR)
+## Osprey (OSPR) Data Wrangling
 
-```{r echo=FALSE}
+```{r include=FALSE}
 # Import data downloaded from eBird and filter for columns and rows of interest
 OSPR_MA_ebd <- read_ebd(
   "./Data/Raw/Massachusetts/ebd_US-MA_osprey_relFeb-2021/ebd_US-MA_osprey_relFeb-2021.txt") %>%
   select(common_name:observation_count, state, county, latitude:observation_date, protocol_type,duration_minutes:all_species_reported) %>% 
-  mutate(Month = month(observation_date),
-         Year = year(observation_date)) %>% 
-  mutate(Month_Year = floor_date(observation_date, unit = "month")) %>% 
+  mutate(Month_Year = floor_date(observation_date, unit = "month"),
+         Week = floor_date(observation_date, unit = "week")) %>% 
   filter(year(observation_date) %in% c(2010:2021)) %>%
-  arrange(Month_Year)
+  arrange(Month_Year, Week)
 
 #Convert "presence" notations (symbolized with an "X") to observations of 1 bird
 OSPR_MA_ebd$observation_count[OSPR_MA_ebd$observation_count == "X"] <- 1
@@ -67,34 +71,234 @@ OSPR_MA_ebd$observation_count <- as.integer(OSPR_MA_ebd$observation_count)
 #Join monthly temperature data to bird observation data
 OSPR_MA_ebd <- merge(x=OSPR_MA_ebd, y=MA_temp_state, by='Month_Year', all.x=TRUE)
 
-#Create a summary dataframe for the number of observations in each month
+# Summarize the number of observations by month
 OSPR_MA_month <- OSPR_MA_ebd %>% 
   group_by(Month_Year) %>% 
-  summarize(Observations = sum(observation_count),
-            AvgMonthlyTemp_F = first(AvgMonthlyTemp_F)) %>% 
+  summarize(Monthly_Obs = sum(observation_count),
+            AvgMonthlyTemp_F = first(AvgMonthlyTemp_F)) %>%
   mutate(Common_Name = "Osprey",
          State = "Massachusetts") %>% 
-  select(Common_Name, State, Observations, Month_Year, AvgMonthlyTemp_F)
+  select(Common_Name, State, Monthly_Obs, Month_Year, AvgMonthlyTemp_F)
+
+#Summarize the number of observations by week
+OSPR_MA_week <- OSPR_MA_ebd %>% 
+  group_by(Week, Month_Year) %>% 
+  summarize(Weekly_Obs = sum(observation_count))
+
+#Create a summary dataframe of bird observations by merging month/week
+OSPR_MA_obs <- merge(x=OSPR_MA_month, y=OSPR_MA_week, by='Month_Year', all.x=TRUE) %>% mutate(Year = year(Month_Year))
+
+#Create a summary dataframe of the lowest observations by month/week
+OSPR_MA_low <- OSPR_MA_obs %>%
+  mutate(Year = floor_date(Month_Year, unit = "year")) %>% 
+  group_by(Year) %>%
+  filter(Monthly_Obs == min(Monthly_Obs)) %>% 
+  group_by(Month_Year) %>% 
+  filter(Weekly_Obs == min(Weekly_Obs)) %>% 
+  rename(MinMonthlyObs = Monthly_Obs,
+         MinWeeklyObs = Weekly_Obs) %>% 
+  select(Common_Name, State, Week, Month_Year, Year, MinWeeklyObs, MinMonthlyObs, AvgMonthlyTemp_F)
+            
 
 # Create a summary dataframe of first and last observation dates per year
-OSPR_MA_firstlast <- OSPR_MA_ebd %>% 
-  group_by(year(Month_Year)) %>% 
+OSPR_MA_firstlast <- OSPR_MA_ebd %>%
+  mutate(Year = floor_date(observation_date, unit = "year")) %>% 
+  group_by(Year) %>% 
   summarize(First_Observation = min(observation_date),
             Last_Observation = max(observation_date),
             AvgAnnualTemp_F = mean(AvgMonthlyTemp_F)) %>% 
-  rename(Year = "year(Month_Year)") %>% 
+  #rename(Year = "year(Month_Year)") %>% 
   mutate(Common_Name = "Osprey",
          State = "Massachusetts") %>% 
   select(Common_Name, State, Year, First_Observation, Last_Observation, AvgAnnualTemp_F)
 ```
 
-## Red-Winged Blackbird (RWBL)
+## Plot Osprey
 ```{r}
+# Faceted plot of monthly observations
+OSPRobplot <- ggplot(data=OSPR_MA_obs, 
+                     aes(x=month(Month_Year), 
+                         y=Monthly_Obs,
+                         group=as.factor(Year), 
+                         color=AvgMonthlyTemp_F)) +
+  geom_line(lwd=0.8) +
+  scale_x_continuous(breaks = c(1:12), labels = c('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')) +
+  geom_smooth(method = 'loess', se = F, color='black', lwd=0.6) +
+  scale_color_viridis(option="plasma") +
+  facet_grid('Year') +
+  labs(x='Date', 
+       y= 'Observations', 
+       color='Mean Temperature (F)', 
+       title = 'Osprey', 
+       subtitle = 'Massachussetts') +
+  theme(legend.position = 'bottom')
+
+print(OSPRobplot)
+
+
+OSPRobplot2 <- ggplot(OSPR_MA_obs, aes(x=Month_Year, y=Monthly_Obs,
+                         color=AvgMonthlyTemp_F)) +
+  labs(x='Date', y= 'Observations', color='Mean Temperature (F)', 
+       title = 'Osprey', subtitle = paste0('Massachussetts, ',OSPR_MA_obs$Year)) +
+  theme(legend.position = 'bottom')+
+  geom_line(lwd=0.8, data= . %>% filter(Year==2010)) +
+  geom_smooth(data = . %>% filter(Year==2010),
+              method = 'loess', se = F, color='black', lwd=0.6) +
+  scale_color_viridis(option="plasma") +
+  scale_x_date(date_breaks = '1 month', date_labels = '%b')
+
+print(OSPRobplot2)
+
+#2010
+pOSPR10 <- ggplot(filter(OSPR_MA_obs, Year==2010), 
+                  aes(x=Month_Year, y=Monthly_Obs,
+                         color=AvgMonthlyTemp_F)) +
+  geom_line(lwd=0.8) +
+  geom_smooth(method = 'loess', se = F, color='black', lwd=0.6) +
+  scale_color_viridis(option="plasma") +
+  scale_x_date(date_breaks = '1 month', date_labels = '%b') +
+  labs(x='', y='', title = '2010') +
+  theme(legend.position = 'none')
+
+print(pOSPR10)
+
+#2011
+pOSPR11 <- ggplot(filter(OSPR_MA_obs, Year==2011), 
+                  aes(x=Month_Year, y=Monthly_Obs, color=AvgMonthlyTemp_F)) +
+  geom_line(lwd=0.8) +
+  geom_smooth(method = 'loess', se = F, color='black', lwd=0.6) +
+  scale_color_viridis(option="plasma") +
+  scale_x_date(date_breaks = '1 month', date_labels = '%b') +
+  labs(x='', y='', title = '2011') +
+  theme(legend.position = 'none')
+
+print(pOSPR11)
+
+#2012
+pOSPR12 <- ggplot(filter(OSPR_MA_obs, Year==2012), 
+                  aes(x=Month_Year, y=Monthly_Obs, color=AvgMonthlyTemp_F)) +
+  geom_line(lwd=0.8) +
+  geom_smooth(method = 'loess', se = F, color='black', lwd=0.6) +
+  scale_color_viridis(option="plasma") +
+  scale_x_date(date_breaks = '1 month', date_labels = '%b') +
+  labs(x='', y='', title = '2012') +
+  theme(legend.position = 'none')
+
+print(pOSPR12)
+
+#2013
+pOSPR13 <- ggplot(filter(OSPR_MA_obs, Year==2013), 
+                  aes(x=Month_Year, y=Monthly_Obs, color=AvgMonthlyTemp_F)) +
+  geom_line(lwd=0.8) +
+  geom_smooth(method = 'loess', se = F, color='black', lwd=0.6) +
+  scale_color_viridis(option="plasma") +
+  scale_x_date(date_breaks = '1 month', date_labels = '%b') +
+  labs(x='', y='', title = '2013') +
+  theme(legend.position = 'none')
+
+print(pOSPR13)
+
+#2014
+pOSPR14 <- ggplot(filter(OSPR_MA_obs, Year==2014), 
+                  aes(x=Month_Year, y=Monthly_Obs, color=AvgMonthlyTemp_F)) +
+  geom_line(lwd=0.8) +
+  geom_smooth(method = 'loess', se = F, color='black', lwd=0.6) +
+  scale_color_viridis(option="plasma") +
+  scale_x_date(date_breaks = '1 month', date_labels = '%b') +
+  labs(x='', y='', title = '2014') +
+  theme(legend.position = 'none')
+
+print(pOSPR14)
+
+#2015
+pOSPR15 <- ggplot(filter(OSPR_MA_obs, Year==2015), 
+                  aes(x=Month_Year, y=Monthly_Obs, color=AvgMonthlyTemp_F)) +
+  geom_line(lwd=0.8) +
+  geom_smooth(method = 'loess', se = F, color='black', lwd=0.6) +
+  scale_color_viridis(option="plasma") +
+  scale_x_date(date_breaks = '1 month', date_labels = '%b') +
+  labs(x='', y='', title = '2015') +
+  theme(legend.position = 'none')
+
+print(pOSPR15)
+
+#2016
+pOSPR16 <- ggplot(filter(OSPR_MA_obs, Year==2016), 
+                  aes(x=Month_Year, y=Monthly_Obs, color=AvgMonthlyTemp_F)) +
+  geom_line(lwd=0.8) +
+  geom_smooth(method = 'loess', se = F, color='black', lwd=0.6) +
+  scale_color_viridis(option="plasma") +
+  scale_x_date(date_breaks = '1 month', date_labels = '%b') +
+  labs(x='', y='', title = '2016') +
+  theme(legend.position = 'none')
+
+print(pOSPR16)
+
+#2017
+pOSPR17 <- ggplot(filter(OSPR_MA_obs, Year==2017), 
+                  aes(x=Month_Year, y=Monthly_Obs, color=AvgMonthlyTemp_F)) +
+  geom_line(lwd=0.8) +
+  geom_smooth(method = 'loess', se = F, color='black', lwd=0.6) +
+  scale_color_viridis(option="plasma") +
+  scale_x_date(date_breaks = '1 month', date_labels = '%b') +
+  labs(x='', y='', title = '2017') +
+  theme(legend.position = 'none')
+
+print(pOSPR17)
+
+#2018
+pOSPR18 <- ggplot(filter(OSPR_MA_obs, Year==2018), 
+                  aes(x=Month_Year, y=Monthly_Obs, color=AvgMonthlyTemp_F)) +
+  geom_line(lwd=0.8) +
+  geom_smooth(method = 'loess', se = F, color='black', lwd=0.6) +
+  scale_color_viridis(option="plasma") +
+  scale_x_date(date_breaks = '1 month', date_labels = '%b') +
+  labs(x='', y='', title = '2018') +
+  theme(legend.position = 'none')
+
+print(pOSPR18)
+
+#2019
+pOSPR19 <- ggplot(filter(OSPR_MA_obs, Year==2019), 
+                  aes(x=Month_Year, y=Monthly_Obs, color=AvgMonthlyTemp_F)) +
+  geom_line(lwd=0.8) +
+  geom_smooth(method = 'loess', se = F, color='black', lwd=0.6) +
+  scale_color_viridis(option="plasma") +
+  scale_x_date(date_breaks = '1 month', date_labels = '%b') +
+  labs(x='', y='', title = '2019') +
+  theme(legend.position = 'none')
+
+print(pOSPR19)
+
+#2020
+pOSPR20 <- ggplot(filter(OSPR_MA_obs, Year==2020), 
+                  aes(x=Month_Year, y=Monthly_Obs, color=AvgMonthlyTemp_F)) +
+  geom_line(lwd=0.8) +
+  geom_smooth(method = 'loess', se = F, color='black', lwd=0.6) +
+  scale_color_viridis(option="plasma") +
+  scale_x_date(date_breaks = '1 month', date_labels = '%b') +
+  labs(x='', y='', title = '2020', color= 'Mean Temperature (C)') +
+  theme(legend.position = 'bottom')
+
+print(pOSPR20)
+
+#cowplot
+prow <- plot_grid(pOSPR10, pOSPR11, pOSPR12, pOSPR13, pOSPR14, pOSPR15, pOSPR16, pOSPR17, pOSPR18, pOSPR19, pOSPR20,
+  nrow = 2, ncol = 5)
+
+print(prow)
+
+```
+
+
+## Red-Winged Blackbird (RWBL)
+```{r, include=FALSE}
 # Import data downloaded from eBird and filter for columns and rows of interest
 RWBL_MA_ebd <- read_ebd(
   "./Data/Raw/Massachusetts/ebd_US-MA_rewbla_201001_202102_relMar-2021/ebd_US-MA_rewbla_201001_202102_relMar-2021.txt") %>%
   select(common_name:observation_count, state, county, latitude:observation_date, protocol_type,duration_minutes:all_species_reported) %>% 
-  mutate(Month_Year = floor_date(observation_date, unit = "month")) %>% 
+  mutate(Month_Year = floor_date(observation_date, unit = "month"),
+         Week = floor_date(observation_date, unit = "week")) %>% 
   filter(year(observation_date) %in% c(2010:2021)) %>%
   arrange(Month_Year)
 
@@ -105,29 +309,66 @@ RWBL_MA_ebd$observation_count <- as.integer(RWBL_MA_ebd$observation_count)
 #Join monthly temperature data to bird observation data
 RWBL_MA_ebd <- merge(x=RWBL_MA_ebd, y=MA_temp_state, by='Month_Year', all.x=TRUE)
 
-#Create a summary dataframe for the number of observations in each month
+# Summarize the number of observations by month
 RWBL_MA_month <- RWBL_MA_ebd %>% 
   group_by(Month_Year) %>% 
-  summarize(Observations = sum(observation_count),
-            AvgMonthlyTemp_F = first(AvgMonthlyTemp_F)) %>% 
+  summarize(Monthly_Obs = sum(observation_count),
+            AvgMonthlyTemp_F = first(AvgMonthlyTemp_F)) %>%
   mutate(Common_Name = "Red-Winged Blackbird",
          State = "Massachusetts") %>% 
-  select(Common_Name, State, Observations, Month_Year, AvgMonthlyTemp_F)
+  select(Common_Name, State, Monthly_Obs, Month_Year, AvgMonthlyTemp_F)
+
+#Summarize the number of observations by week
+RWBL_MA_week <- RWBL_MA_ebd %>% 
+  group_by(Week, Month_Year) %>% 
+  summarize(Weekly_Obs = sum(observation_count))
+
+#Create a summary dataframe of bird observations by merging month/week
+RWBL_MA_obs <- merge(x=RWBL_MA_month, y=RWBL_MA_week, by='Month_Year', all.x=TRUE) %>% mutate(Year = year(Month_Year))
 
 # Create a summary dataframe of first and last observation dates per year
 RWBL_MA_firstlast <- RWBL_MA_ebd %>% 
-  group_by(year(Month_Year)) %>% 
+  mutate(Year = floor_date(observation_date, unit = "year")) %>% 
+  group_by(Year) %>%
   summarize(First_Observation = min(observation_date),
             Last_Observation = max(observation_date),
             AvgAnnualTemp_F = mean(AvgMonthlyTemp_F)) %>% 
-  rename(Year = "year(Month_Year)") %>% 
   mutate(Common_Name = "Red-Winged Blackbird",
          State = "Massachusetts") %>% 
   select(Common_Name, State, Year, First_Observation, Last_Observation, AvgAnnualTemp_F)
+
+df %>%
+  mutate(dates = as.Date(dates), 
+         date = day(dates), month = month(dates), year = year(dates))
 ```
 
-## Wood Duck (WODU)
+
+## Plot Red-Winged Blackbird
 ```{r}
+# Faceted plot of monthly observations
+RWBLobplot <- ggplot(data=RWBL_MA_obs, 
+                     aes(x=month(Month_Year), 
+                         y=Monthly_Obs,
+                         group=as.factor(Year), 
+                         color=AvgMonthlyTemp_F)) +
+  geom_line(lwd=0.8) +
+  scale_x_continuous(breaks = c(1:12), labels = c('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')) +
+  geom_smooth(method = 'loess', se = F, color='black', lwd=0.6) +
+  scale_color_viridis(option="plasma") +
+  facet_grid('Year') +
+  labs(x='Date', 
+       y= 'Observations', 
+       color='Mean Temperature (F)', 
+       title = 'Red-Winged Blackbird', 
+       subtitle = 'Massachussetts') +
+  theme(legend.position = 'bottom')
+
+print(RWBLobplot)
+```
+
+
+## Wood Duck (WODU)
+```{r, include=FALSE}
 # Import data downloaded from eBird and filter for columns and rows of interest
 WODU_MA_ebd <- read_ebd(
   "./Data/Raw/Massachusetts/ebd_US-MA_wooduc_relFeb-2021/ebd_US-MA_wooduc_relFeb-2021.txt") %>%
@@ -144,7 +385,7 @@ WODU_MA_ebd$observation_count <- as.integer(WODU_MA_ebd$observation_count)
 WODU_MA_ebd <- merge(x=WODU_MA_ebd, y=MA_temp_state, by='Month_Year', all.x=TRUE)
 
 #Create a summary dataframe for the number of observations in each month
-WODU_MA_month <- WODU_MA_ebd %>% 
+WODU_MA_month <- WODU_MA_ebd %>%
   group_by(Month_Year) %>% 
   summarize(Observations = sum(observation_count),
             AvgMonthlyTemp_F = first(AvgMonthlyTemp_F)) %>% 
@@ -154,21 +395,94 @@ WODU_MA_month <- WODU_MA_ebd %>%
 
 # Create a summary dataframe of first and last observation dates per year
 WODU_MA_firstlast <- WODU_MA_ebd %>% 
-  group_by(year(Month_Year)) %>% 
+  mutate(Year = floor_date(observation_date, unit = "year")) %>% 
+  group_by(Year) %>%
   summarize(First_Observation = min(observation_date),
             Last_Observation = max(observation_date),
             AvgAnnualTemp_F = mean(AvgMonthlyTemp_F)) %>% 
-  rename(Year = "year(Month_Year)") %>% 
   mutate(Common_Name = "Wood Duck",
          State = "Massachusetts") %>% 
-  select(Common_Name, State, Year, First_Observation, Last_Observation, AvgAnnualTemp_F)
+  select(Common_Name, State, Year, First_Observation, Last_Observation, AvgAnnualTemp_F) 
 ```
 
-## Plot results
-```{r}
-OspreyPlot <- ggplot(OSPR_MA_month, aes(x=Month_Year, y=Observations, color=AvgMonthlyTemp_F)) +
-  geom_line()
+## Plot Wood Duck (WODU)
+```{r ospr.observations}
+OSPRobplot <- ggplot(data=OSPR_MA_obs, 
+                     aes(x=month(Month_Year), 
+                         y=Monthly_Obs,
+                         group=as.factor(Year), 
+                         color=AvgMonthlyTemp_F)) +
+  geom_line(lwd=0.8) +
+  scale_x_continuous(breaks = c(1:12), labels = c('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')) +
+  geom_smooth(method = 'loess', se = F, color='black', lwd=0.6) +
+  scale_color_viridis(option="plasma") +
+  facet_grid('Year') +
+  labs(x='Date', 
+       y= 'Observations', 
+       color='Mean Temperature (F)', 
+       title = 'Osprey', 
+       subtitle = 'Massachussetts') +
+  theme(legend.position = 'bottom')
 
-OspreyPlot
+print(OSPRobplot)
+
+OSPRobplot2 <- ggplot(OSPR_MA_obs, aes(x=Month_Year, y=Monthly_Obs,
+                         color=AvgMonthlyTemp_F)) +
+  labs(x='Date', y= 'Observations', color='Mean Temperature (F)', 
+       title = 'Osprey', subtitle = paste0('Massachussetts, ',OSPR_MA_obs$Year)) +
+  theme(legend.position = 'bottom')+
+  geom_line(lwd=0.8, data= . %>% filter(Year==2010)) +
+  geom_smooth(data = . %>% filter(Year==2010),
+              method = 'loess', se = F, color='black', lwd=0.6) +
+  scale_color_viridis(option="plasma") +
+  scale_x_date(date_breaks = '1 month', date_labels = '%b')
+
+print(OSPRobplot2)
+
+```
+
+```{r rwbl.observations}
+RWBLobplot <- ggplot(RWBL_MA_month, 
+                     aes(x=Month_Year, y=Observations, color=AvgMonthlyTemp_F)) +
+  geom_line(lwd=0.8) +
+  scale_color_viridis(option="plasma") +
+  geom_smooth(method = 'loess', se = F, color='black', lwd=0.7) +
+  scale_x_date(date_breaks = ('1 year'), date_labels = '%Y') +
+  scale_y_continuous(n.breaks = 6) +
+  labs(x='Date', color='Mean Temperature (F)', 
+       title = 'Red-Winged Blackbird', 
+       subtitle = 'Massachussetts') +
+  theme(legend.position = 'bottom')
+
+print(RWBLobplot)
+```
+
+```{r wodu.observations}
+WODUobplot <- ggplot(WODU_MA_month, 
+                     aes(x=Month_Year, y=Observations, color=AvgMonthlyTemp_F)) +
+  geom_line(lwd=0.8) +
+  scale_color_viridis(option="plasma") +
+  geom_smooth(method = 'loess', se = F, color='black', lwd=0.7) +
+  scale_x_date(date_breaks = ('1 year'), date_labels = '%Y') +
+  labs(x='Date', color='Mean Temperature (F)', 
+       title = 'Wood Duck', 
+       subtitle = 'Massachussetts') +
+  theme(legend.position = 'bottom')
+
+print(WODUobplot)
+```
+
+```{r}
+OSPRmigplot <- ggplot(OSPR_MA_firstlast) +
+  geom_line(aes(x=Year, y=First_Observation, color='green', lwd= 0.8)) +
+  geom_line(aes(x=Year, y=Last_Observation, color='red', lwd=0.8)) +
+  geom_smooth(aes(x=Year, y=First_Observation), method = 'lm', se = F, color='black', lwd=0.6) +
+  geom_smooth(aes(x=Year, y=Last_Observation), method = 'lm', se = F, color='black', lwd=0.6) +
+  #scale_x_date(date_breaks = ('1 year'), date_labels = '%Y') +
+  labs(x='Date', title = 'Osprey', 
+       subtitle = 'Massachussetts') +
+  theme(legend.position = 'bottom')
+
+print(OSPRmigplot)
 ```
 
