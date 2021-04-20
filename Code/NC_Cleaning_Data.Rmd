@@ -29,7 +29,6 @@ mytheme <- theme_classic( base_size = 14) +
   theme( axis.text = element_text( color = "#222222ff"),
          legend.position = "top",
          # remove legend title
-         legend.title = element_blank(),
          # margins (top,right,bottom,left)
          axis.title.x = element_text( color = "black",
                                     margin = margin(20,0,0,0)),
@@ -138,7 +137,10 @@ weather_YM <- weather %>%
 ggplot(allBirds, aes(x = observation_date, fill = common_name, color = common_name)) +
   geom_density(alpha = .2) + 
   facet_wrap(vars(common_name), nrow = 1, ncol = 3) + 
-  theme( legend.position = "none")
+  theme( legend.position = "none",
+         axis.text.x = element_text(angle = 45,
+                                    hjust = 1))
+#  scale_x_date(limits = c(as.Date("2015-01-01"), as.Date("2015-12-31")))
 
 # basic density plot of observations across all years, unfaceted 
 ggplot(allBirds, aes(x = observation_date, fill = common_name, color = common_name)) +
@@ -210,7 +212,10 @@ ggplot(birdsWeather_YM, aes(x = Year_Month,
                             color = AvgMonthlyTemp_Statewide)) + 
   geom_point() + 
   scale_color_colormap(colormap = "temperature") +
-  facet_wrap(vars(common_name))
+  facet_wrap(vars(common_name))  + 
+  labs(y = "Number of Times Bird Appeared in a Checklist",
+       x = "Year",
+       color = "Average Monthly Temperature (F):") 
 
 # same as above, using observations per minute instead
 ggplot(birdsWeather_YM_OPM, aes(x = Year_Month,
@@ -219,7 +224,10 @@ ggplot(birdsWeather_YM_OPM, aes(x = Year_Month,
   geom_point() + 
   scale_color_colormap(colormap = "temperature") +
   facet_wrap(vars(common_name)) + 
-  scale_y_log10()
+  scale_y_log10() + 
+  labs(y = "Average Observations per Minute of Observation (log10)",
+       x = "Year",
+       color = "Average Monthly Temperature (F):")
 
 # presence count by temperature
 ggplot(birdsWeather_YM, aes(x = AvgMonthlyTemp_Statewide,
@@ -288,7 +296,9 @@ allBirds_FirstLast <-
   summarize(first_date = min(observation_date),
             # last date is latest 
             last_date = max(observation_date)) %>% 
-  rename("Year" = "year(Year_Month)")
+  rename("Year" = "year(Year_Month)") %>% 
+  mutate(first_DayOfYear = strftime(first_date, format = "%j"),
+         last_DayOfYear = strftime(last_date, format = "%j"))
 
 # pivot longer to plot both first and last date
 allBirds_FirstLast_piv <- pivot_longer(allBirds_FirstLast,
@@ -296,17 +306,33 @@ allBirds_FirstLast_piv <- pivot_longer(allBirds_FirstLast,
                                    names_to = "first_or_last",
                                    values_to = "date"
                                    ) %>% 
-  mutate(Day = day(date))
+  mutate(Day = day(date),
+         DayOfYear = strftime(date, format = "%j") )
 
 
 ```
 
 ```{r Plot first and last observation dates}
 
+# plot with unpivoted data
+ggplot(allBirds_FirstLast, aes(x = Year, y = date)) + 
+  geom_point() + 
+  geom_line(aes()) + 
+  facet_wrap(vars(common_name))
+
+
+# plot with pivot data
+ggplot(allBirds_FirstLast_piv, aes(x = Year, y = DayOfYear, color = first_or_last)) + 
+  geom_point() + 
+#  geom_line() + 
+  facet_wrap(vars(common_name))
+
+# plot with pivot data, day
 ggplot(allBirds_FirstLast_piv, aes(x = Year, y = Day, color = first_or_last)) + 
   geom_point() + 
   geom_line() + 
   facet_wrap(vars(common_name))
+
 
 
 ```
