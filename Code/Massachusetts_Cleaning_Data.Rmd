@@ -3,7 +3,10 @@ title: "Massachusetts_Cleaning_Data.Rmd"
 author: "Emma Wellbaum"
 date: "4/17/2021"
 output: html_document
+editor_options:
+  chunk_output_type: console
 ---
+
 ###
 This file is for taking the downloaded ebird data and processing it into summary files. 
 
@@ -19,7 +22,7 @@ Wood Duck = WODU
 
 ## Set up
 
-```{r setup}
+```{r setup, include=FALSE}
 getwd()
 
 #install.packages("auk")
@@ -28,12 +31,14 @@ library(tidyr)
 library(dplyr)
 library(lubridate)
 library(ggplot2)
+library(viridis)
+library(cowplot)
 
 ```
 
 ## Summarize State Temperature Data
 
-```{r}
+```{r temp.data.analysis}
 # Import state temperature data, downloaded from the National Atmospheric and
 # Oceanic Administration using the rnoaa package
 MA_temp <- read.csv('./Data/Raw/Massachusetts/MassTemperature20102021.csv') %>% unique()
@@ -47,128 +52,144 @@ MA_temp_state <- MA_temp %>%
   summarize(AvgMonthlyTemp_F = mean(AvgMonthlyTemp))
 ```
 
-## Osprey (OSPR)
+## Import Bird Data
 
-```{r echo=FALSE}
+```{r include=FALSE}
 # Import data downloaded from eBird and filter for columns and rows of interest
-OSPR_MA_ebd <- read_ebd(
-  "./Data/Raw/Massachusetts/ebd_US-MA_osprey_relFeb-2021/ebd_US-MA_osprey_relFeb-2021.txt") %>%
-  select(common_name:observation_count, state, county, latitude:observation_date, protocol_type,duration_minutes:all_species_reported) %>% 
-  mutate(Month = month(observation_date),
-         Year = year(observation_date)) %>% 
-  mutate(Month_Year = floor_date(observation_date, unit = "month")) %>% 
-  filter(year(observation_date) %in% c(2010:2021)) %>%
-  arrange(Month_Year)
+OSPR <- read_ebd(
+  "./Data/Raw/Massachusetts/ebd_US-MA_osprey_relFeb-2021/ebd_US-MA_osprey_relFeb-2021.txt")
+RWBL <- read_ebd(
+  "./Data/Raw/Massachusetts/ebd_US-MA_rewbla_201001_202102_relMar-2021/ebd_US-MA_rewbla_201001_202102_relMar-2021.txt")
+WODU <- read_ebd(
+  "./Data/Raw/Massachusetts/ebd_US-MA_wooduc_relFeb-2021/ebd_US-MA_wooduc_relFeb-2021.txt")
 
-#Convert "presence" notations (symbolized with an "X") to observations of 1 bird
-OSPR_MA_ebd$observation_count[OSPR_MA_ebd$observation_count == "X"] <- 1
-OSPR_MA_ebd$observation_count <- as.integer(OSPR_MA_ebd$observation_count)
+#Create a merged dataset with all three species
+MAbirds <- bind_rows(OSPR, RWBL, WODU)
+```
+
+
+## Wrangle Data
+
+```{r include=FALSE}
+MAbirds <- MAbirds %>% 
+  select(common_name:observation_count, state, county, latitude:observation_date, protocol_type,duration_minutes:all_species_reported) %>% 
+  mutate(Month_Year = floor_date(observation_date, unit = "month"),
+         Week = floor_date(observation_date, unit = "week"),
+         Presence = 1,
+         observation_count = as.numeric(replace(observation_count, observation_count == 'X', '1')),
+         observations_per_min = observation_count/duration_minutes) %>% 
+  filter(year(observation_date) %in% c(2010:2021)) %>%
+  arrange(Month_Year, Week)
+
+# Examine the merged dataset
+summary(MAbirds$observations_per_min)
 
 #Join monthly temperature data to bird observation data
-OSPR_MA_ebd <- merge(x=OSPR_MA_ebd, y=MA_temp_state, by='Month_Year', all.x=TRUE)
+MAbirds <- merge(x=MAbirds, y=MA_temp_state, by='Month_Year', all.x=TRUE)
 
-#Create a summary dataframe for the number of observations in each month
-OSPR_MA_month <- OSPR_MA_ebd %>% 
-  group_by(Month_Year) %>% 
-  summarize(Observations = sum(observation_count),
-            AvgMonthlyTemp_F = first(AvgMonthlyTemp_F)) %>% 
-  mutate(Common_Name = "Osprey",
-         State = "Massachusetts") %>% 
-  select(Common_Name, State, Observations, Month_Year, AvgMonthlyTemp_F)
+#Filter the dataset for valid observational effort (remove NAs)
+MAbirds_obs <- MAbirds %>% 
+  filter( is.na(observations_per_min) == FALSE) %>% 
+  filter( observations_per_min != Inf)
 
-# Create a summary dataframe of first and last observation dates per year
-OSPR_MA_firstlast <- OSPR_MA_ebd %>% 
-  group_by(year(Month_Year)) %>% 
-  summarize(First_Observation = min(observation_date),
-            Last_Observation = max(observation_date),
-            AvgAnnualTemp_F = mean(AvgMonthlyTemp_F)) %>% 
-  rename(Year = "year(Month_Year)") %>% 
-  mutate(Common_Name = "Osprey",
-         State = "Massachusetts") %>% 
-  select(Common_Name, State, Year, First_Observation, Last_Observation, AvgAnnualTemp_F)
+#Confirm the filtered dataset does not have NA or infinite values
+summary(MAbirds_obs$observations_per_min)
+
+#Summarize the number of observations by month
+MAbirds_month <- MAbirds_obs %>% 
+  group_by(Month_Year, common_name, state) %>% 
+  summarize(ObservationE = mean(observations_per_min),
+            Presence = sum(Presence),
+            Observations = sum(observation_count),
+            AvgMonthlyTemp_F = mean(AvgMonthlyTemp_F)) %>%
+  select(common_name, state, Observations, ObservationE, Presence, Month_Year, AvgMonthlyTemp_F)
+
+#Summarize the number of observations by week
+MAbirds_week <- MAbirds_obs %>%
+  group_by(Week, Month_Year, common_name, state) %>% 
+  summarize(ObservationE = mean(observations_per_min),
+            Presence = sum(Presence),
+            Observations = sum(observation_count),
+            AvgWeeklyTemp_F = mean(AvgMonthlyTemp_F)) %>%
+  mutate(Month = month(Week),
+         Year = year(Week)) %>% 
+  filter(Year %in% c(2010:2020)) %>% 
+  select(common_name, state, Observations, ObservationE, Presence, Week, Month, Year, Month_Year, AvgWeeklyTemp_F)
 ```
 
-## Red-Winged Blackbird (RWBL)
-```{r}
-# Import data downloaded from eBird and filter for columns and rows of interest
-RWBL_MA_ebd <- read_ebd(
-  "./Data/Raw/Massachusetts/ebd_US-MA_rewbla_201001_202102_relMar-2021/ebd_US-MA_rewbla_201001_202102_relMar-2021.txt") %>%
-  select(common_name:observation_count, state, county, latitude:observation_date, protocol_type,duration_minutes:all_species_reported) %>% 
-  mutate(Month_Year = floor_date(observation_date, unit = "month")) %>% 
-  filter(year(observation_date) %in% c(2010:2021)) %>%
-  arrange(Month_Year)
 
-#Convert "presence" notations (symbolized with an "X") to observations of 1 bird
-RWBL_MA_ebd$observation_count[RWBL_MA_ebd$observation_count == "X"] <- 1
-RWBL_MA_ebd$observation_count <- as.integer(RWBL_MA_ebd$observation_count)
+## Plot Data
 
-#Join monthly temperature data to bird observation data
-RWBL_MA_ebd <- merge(x=RWBL_MA_ebd, y=MA_temp_state, by='Month_Year', all.x=TRUE)
+```{r monthly.sum.plots}
+#Plot Average Observations per Minute for 2010-2021 for All Species
+ggplot(MAbirds_month, 
+       aes(x=Month_Year, y=log(ObservationE), color=AvgMonthlyTemp_F)) +
+  geom_line(lwd=0.8) +
+  geom_hline(yintercept=-1.5, lty=2) +
+  scale_color_viridis(option='plasma') +
+  scale_x_date(date_breaks = '1 year', date_labels = '%Y') +
+labs(x='Year', y='log(Observations/Min)', color='Mean Temperature (F)', title= 'Average Observations per Minute of Observation: 2010-2021', subtitle = 'Massachusetts') +
+  theme(legend.position = 'bottom') +
+  facet_wrap(~common_name, nrow=3)
 
-#Create a summary dataframe for the number of observations in each month
-RWBL_MA_month <- RWBL_MA_ebd %>% 
-  group_by(Month_Year) %>% 
-  summarize(Observations = sum(observation_count),
-            AvgMonthlyTemp_F = first(AvgMonthlyTemp_F)) %>% 
-  mutate(Common_Name = "Red-Winged Blackbird",
-         State = "Massachusetts") %>% 
-  select(Common_Name, State, Observations, Month_Year, AvgMonthlyTemp_F)
 
-# Create a summary dataframe of first and last observation dates per year
-RWBL_MA_firstlast <- RWBL_MA_ebd %>% 
-  group_by(year(Month_Year)) %>% 
-  summarize(First_Observation = min(observation_date),
-            Last_Observation = max(observation_date),
-            AvgAnnualTemp_F = mean(AvgMonthlyTemp_F)) %>% 
-  rename(Year = "year(Month_Year)") %>% 
-  mutate(Common_Name = "Red-Winged Blackbird",
-         State = "Massachusetts") %>% 
-  select(Common_Name, State, Year, First_Observation, Last_Observation, AvgAnnualTemp_F)
+#Plot Average Observations per Minute by Year and Species: Osprey
+ggplot(filter(MAbirds_month, common_name == 'Osprey'), aes(x=month(Month_Year), y=log(ObservationE), group=year(Month_Year), color=AvgMonthlyTemp_F)) +
+  geom_line(lwd=0.8) +
+  #geom_smooth(method='lm', se=F, color='black', lwd=0.6) +
+  scale_color_viridis(option='plasma') + 
+  scale_y_continuous(n.breaks = 3) +
+  scale_x_continuous(breaks = c(1:12), labels = c('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')) +
+labs(x='Month', y='log(Observations/Min)', color='Mean Temperature (F)', title = 'Average Osprey Observations per Minute of Observation', subtitle = 'Massachussetts') +
+  theme(legend.position = 'bottom') +
+  facet_grid(vars(year(Month_Year)))
+
+
+#Plot Average Observations per Minute by Year and Species: Red-winged Blackbird
+ggplot(filter(MAbirds_month, common_name == 'Red-winged Blackbird', year(Month_Year) <2021), aes(x=month(Month_Year), y=log(ObservationE), group=year(Month_Year), color=AvgMonthlyTemp_F)) +
+  geom_line(lwd=0.8) +
+  #geom_smooth(method='lm', se=F, color='black', lwd=0.6) +
+  scale_color_viridis(option='plasma') + 
+  scale_y_continuous(n.breaks = 3) +
+  scale_x_continuous(breaks = c(1:12), labels = c('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')) +
+labs(x='Month', y='log(Observations/Min)', color='Mean Temperature (F)', title = 'Average Red-winged Blackbird Observations per Minute of Observation', subtitle = 'Massachussetts') +
+  theme(legend.position = 'bottom') +
+  facet_grid(vars(year(Month_Year)))
+
+
+#Plot Average Observations per Minute by Year and Species: Wood Duck
+ggplot(filter(MAbirds_month, common_name == 'Wood Duck', year(Month_Year) <2021), aes(x=month(Month_Year), y=log(ObservationE), group=year(Month_Year), color=AvgMonthlyTemp_F)) +
+  geom_line(lwd=0.8) +
+  #geom_smooth(method='lm', se=F, color='black', lwd=0.6) +
+  scale_color_viridis(option='plasma') + 
+  scale_y_continuous(n.breaks = 3) +
+  scale_x_continuous(breaks = c(1:12), labels = c('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')) +
+labs(x='Month', y='log(Observations/Min)', color='Mean Temperature (F)', title = 'Average Wood Duck Observations per Minute of Observation', subtitle = 'Massachussetts') +
+  theme(legend.position = 'bottom') +
+  facet_grid(vars(year(Month_Year)))
 ```
 
-## Wood Duck (WODU)
-```{r}
-# Import data downloaded from eBird and filter for columns and rows of interest
-WODU_MA_ebd <- read_ebd(
-  "./Data/Raw/Massachusetts/ebd_US-MA_wooduc_relFeb-2021/ebd_US-MA_wooduc_relFeb-2021.txt") %>%
-  select(common_name:observation_count, state, county, latitude:observation_date, protocol_type,duration_minutes:all_species_reported) %>% 
-  mutate(Month_Year = floor_date(observation_date, unit = "month")) %>% 
-  filter(year(observation_date) %in% c(2010:2021)) %>%
-  arrange(Month_Year)
 
-#Convert "presence" notations (symbolized with an "X") to observations of 1 bird
-WODU_MA_ebd$observation_count[WODU_MA_ebd$observation_count == "X"] <- 1
-WODU_MA_ebd$observation_count <- as.integer(WODU_MA_ebd$observation_count)
+```{r weekly.sum.plots}
+#Plot Average Observations per Minute for 2010-2021 for All Species
+ggplot(MAbirds_week, 
+       aes(x=Week, y=log(ObservationE), color=AvgWeeklyTemp_F)) +
+  geom_line(lwd=0.8) +
+  geom_hline(yintercept=-2, lty=2) +
+  scale_color_viridis(option='plasma') +
+  scale_x_date(date_breaks = '1 year', date_labels = '%Y') +
+labs(x='Year', y='log(Observations/Min)', color='Mean Temperature (F)', title= 'Average Observations per Minute of Observation: 2010-2021', subtitle = 'Massachusetts') +
+  theme(legend.position = 'bottom') +
+  facet_wrap(~common_name, nrow=3)
 
-#Join monthly temperature data to bird observation data
-WODU_MA_ebd <- merge(x=WODU_MA_ebd, y=MA_temp_state, by='Month_Year', all.x=TRUE)
 
-#Create a summary dataframe for the number of observations in each month
-WODU_MA_month <- WODU_MA_ebd %>% 
-  group_by(Month_Year) %>% 
-  summarize(Observations = sum(observation_count),
-            AvgMonthlyTemp_F = first(AvgMonthlyTemp_F)) %>% 
-  mutate(Common_Name = "Wood Duck",
-         State = "Massachusetts") %>% 
-  select(Common_Name, State, Observations, Month_Year, AvgMonthlyTemp_F)
-
-# Create a summary dataframe of first and last observation dates per year
-WODU_MA_firstlast <- WODU_MA_ebd %>% 
-  group_by(year(Month_Year)) %>% 
-  summarize(First_Observation = min(observation_date),
-            Last_Observation = max(observation_date),
-            AvgAnnualTemp_F = mean(AvgMonthlyTemp_F)) %>% 
-  rename(Year = "year(Month_Year)") %>% 
-  mutate(Common_Name = "Wood Duck",
-         State = "Massachusetts") %>% 
-  select(Common_Name, State, Year, First_Observation, Last_Observation, AvgAnnualTemp_F)
+#Plot Seasonal Stay in Massachusetts by Species and Year
+ggplot(MAbirds_week) +
+  geom_smooth(aes(x=month(Week), y=log(ObservationE), color=AvgWeeklyTemp_F), method='loess', se=F, lwd=0.8) +
+  scale_color_viridis(option='plasma') + 
+  scale_y_continuous(n.breaks = 3) +
+  scale_x_continuous(breaks = c(1, 4, 8, 12), labels = c('Jan','Apr', 'Aug', 'Dec')) +
+labs(x='Month', y='', title='Seasonal Stay by Species Over Time', subtitle = 'Massachusetts') +
+  theme(legend.position = 'bottom', axis.text.y = element_blank(), axis.ticks.y = element_blank()) +
+  facet_grid(vars(year(Week)), vars(common_name))
 ```
-
-## Plot results
-```{r}
-OspreyPlot <- ggplot(OSPR_MA_month, aes(x=Month_Year, y=Observations, color=AvgMonthlyTemp_F)) +
-  geom_line()
-
-OspreyPlot
-```
-
