@@ -34,6 +34,10 @@ library(ggplot2)
 library(viridis)
 library(cowplot)
 
+#Set theme
+mytheme <- theme_bw(base_size = 14) + 
+  theme(legend.position = 'right')
+theme_set(mytheme)
 ```
 
 ## Summarize State Temperature Data
@@ -128,45 +132,61 @@ ggplot(MAbirds_month,
   geom_hline(yintercept=-1.5, lty=2) +
   scale_color_viridis(option='plasma') +
   scale_x_date(date_breaks = '1 year', date_labels = '%Y') +
-labs(x='Year', y='log(Observations/Min)', color='Mean Temperature (F)', title= 'Average Observations per Minute of Observation: 2010-2021', subtitle = 'Massachusetts') +
-  theme(legend.position = 'bottom') +
+labs(x='Year', y='Average Observations per Minute of Observation (log10)', color='Mean Temperature (F)', title= 'Massachusets Bird Observations: 2010-2021', subtitle = 'by Average Monthly Temperature (F)') +
   facet_wrap(~common_name, nrow=3)
 
 
 #Plot Average Observations per Minute by Year and Species: Osprey
-ggplot(filter(MAbirds_month, common_name == 'Osprey'), aes(x=month(Month_Year), y=log(ObservationE), group=year(Month_Year), color=AvgMonthlyTemp_F)) +
+OSPRplot <- ggplot(filter(MAbirds_month, common_name == 'Osprey'), aes(x=month(Month_Year), y=log(ObservationE), group=year(Month_Year), color=AvgMonthlyTemp_F)) +
   geom_line(lwd=0.8) +
   #geom_smooth(method='lm', se=F, color='black', lwd=0.6) +
   scale_color_viridis(option='plasma') + 
   scale_y_continuous(n.breaks = 3) +
-  scale_x_continuous(breaks = c(1:12), labels = c('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')) +
-labs(x='Month', y='log(Observations/Min)', color='Mean Temperature (F)', title = 'Average Osprey Observations per Minute of Observation', subtitle = 'Massachussetts') +
-  theme(legend.position = 'bottom') +
+  scale_x_continuous(expand = c(0,0), breaks = c(1, 4, 8, 12), labels = c('Jan','Apr', 'Aug', 'Dec')) +
+labs(x='', y='Average Observations per Minute of Observation (log10)', color='Mean Temperature (F)', title = 'Osprey') +
+  theme(legend.position='none', title=element_text(size=12)) +
   facet_grid(vars(year(Month_Year)))
 
 
 #Plot Average Observations per Minute by Year and Species: Red-winged Blackbird
-ggplot(filter(MAbirds_month, common_name == 'Red-winged Blackbird', year(Month_Year) <2021), aes(x=month(Month_Year), y=log(ObservationE), group=year(Month_Year), color=AvgMonthlyTemp_F)) +
+RWBLplot <- ggplot(filter(MAbirds_month, common_name == 'Red-winged Blackbird', year(Month_Year) <2021), aes(x=month(Month_Year), y=log(ObservationE), group=year(Month_Year), color=AvgMonthlyTemp_F)) +
   geom_line(lwd=0.8) +
   #geom_smooth(method='lm', se=F, color='black', lwd=0.6) +
   scale_color_viridis(option='plasma') + 
   scale_y_continuous(n.breaks = 3) +
-  scale_x_continuous(breaks = c(1:12), labels = c('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')) +
-labs(x='Month', y='log(Observations/Min)', color='Mean Temperature (F)', title = 'Average Red-winged Blackbird Observations per Minute of Observation', subtitle = 'Massachussetts') +
-  theme(legend.position = 'bottom') +
+  scale_x_continuous(expand = c(0,0), breaks = c(1, 4, 8, 12), labels = c('Jan','Apr', 'Aug', 'Dec')) +
+labs(x='', y='', color='Mean Temperature (F)', title='Red-winged Blackbird') +
+  theme(legend.position='bottom', title=element_text(size=12)) +
   facet_grid(vars(year(Month_Year)))
 
 
 #Plot Average Observations per Minute by Year and Species: Wood Duck
-ggplot(filter(MAbirds_month, common_name == 'Wood Duck', year(Month_Year) <2021), aes(x=month(Month_Year), y=log(ObservationE), group=year(Month_Year), color=AvgMonthlyTemp_F)) +
+WODUplot <- ggplot(filter(MAbirds_month, common_name == 'Wood Duck', year(Month_Year) <2021), aes(x=month(Month_Year), y=log(ObservationE), group=year(Month_Year), color=AvgMonthlyTemp_F)) +
   geom_line(lwd=0.8) +
   #geom_smooth(method='lm', se=F, color='black', lwd=0.6) +
   scale_color_viridis(option='plasma') + 
   scale_y_continuous(n.breaks = 3) +
-  scale_x_continuous(breaks = c(1:12), labels = c('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')) +
-labs(x='Month', y='log(Observations/Min)', color='Mean Temperature (F)', title = 'Average Wood Duck Observations per Minute of Observation', subtitle = 'Massachussetts') +
-  theme(legend.position = 'bottom') +
+  scale_x_continuous(expand = c(0,0), breaks = c(1, 4, 8, 12), labels = c('Jan','Apr', 'Aug', 'Dec')) +
+labs(x='', y='', color='Mean Temperature (F)', title='Wood Duck') +
+  theme(legend.position='none', title=element_text(size=12)) +
   facet_grid(vars(year(Month_Year)))
+
+tempplot <- plot_grid(OSPRplot, RWBLplot + theme(legend.position='none'), WODUplot, nrow=1)
+
+legendplot <- get_legend(RWBLplot + theme(legend.position='right', plot.margin=margin(7, 0, 0, 0)))
+
+title <- ggdraw() + 
+  draw_label('Seasonal Stay in Massachusetts by Species',
+             fontface = 'bold',
+             x = 0,
+             hjust = 0) +
+  theme(plot.margin = margin(0, 0, 0, 5))
+
+tplot <- plot_grid(title, tempplot, ncol = 1, rel_heights = c(.08, 1))
+
+finalplot <- plot_grid(tplot, legendplot, nrow=1, rel_widths = c(1, .2))
+
+print(finalplot)
 ```
 
 
@@ -185,11 +205,11 @@ labs(x='Year', y='log(Observations/Min)', color='Mean Temperature (F)', title= '
 
 #Plot Seasonal Stay in Massachusetts by Species and Year
 ggplot(MAbirds_week) +
-  geom_smooth(aes(x=month(Week), y=log(ObservationE), color=AvgWeeklyTemp_F), method='loess', se=F, lwd=0.8) +
-  scale_color_viridis(option='plasma') + 
+  geom_smooth(aes(x=month(Week), y=log(ObservationE), color=common_name), method='loess', se=F, lwd=0.8) +
+  scale_color_manual(values=c('#1E88E5', '#D81B60', '#004D40')) + 
   scale_y_continuous(n.breaks = 3) +
-  scale_x_continuous(breaks = c(1, 4, 8, 12), labels = c('Jan','Apr', 'Aug', 'Dec')) +
-labs(x='Month', y='', title='Seasonal Stay by Species Over Time', subtitle = 'Massachusetts') +
-  theme(legend.position = 'bottom', axis.text.y = element_blank(), axis.ticks.y = element_blank()) +
+  scale_x_continuous(expand = c(0,0), breaks = c(1, 4, 8, 12), labels = c('Jan','Apr', 'Aug', 'Dec')) +
+labs(x='', y='', color='', title='Seasonal Stay by Species Over Time', subtitle = 'Massachusetts') +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(), panel.spacing.x = unit(2, 'lines')) +
   facet_grid(vars(year(Week)), vars(common_name))
 ```
