@@ -130,23 +130,9 @@ RWBL_ME_month <- RWBL_ME_ebd %>%
 plot3 <- ggplot(RWBL_ME_month, aes(x = Month_Year, y = Observations)) + geom_line() + 
   geom_smooth(method = "loess", se = F)
 print(plot3)
-ggsave("RWBL_ME_month.png")
+#ggsave("RWBL_ME_month.png")
 
 ```
-
-Data Challenges: Cannot account for effort. While some checklists do include distance traveled and time spent observing, we are not able to download checklists without observations of a species for negative data.
-
-The plots show increasing numbers over time, but this is probably due to more checklists. We could divide observations by # of checklists in a month, but how many checklists are submitted with zero of a given species?
-
-TODO:
-
-Collect temperature data and add to summary csv files.
-Isolate and remove trend from increasing ebird use.
-Make stacked graph with temperature trend and species count trend.
-
-Making the project more fine-grained:
-Summarize by county, not state
-Summarize by week of year, not month
 
 ```{r Add.Temperature.Data}
 
@@ -196,5 +182,56 @@ RWBL_ME_dates <- RWBL_ME_ebd %>%
 write.csv(OSPR_ME_dates, file = "../Data/Processed/Maine/OSPR_ME_firstlast.csv")
 write.csv(WODU_ME_dates, file = "../Data/Processed/Maine/WODU_ME_firstlast.csv")
 write.csv(RWBL_ME_dates, file = "../Data/Processed/Maine/RWBL_ME_firstlast.csv")
+
+```
+
+```{r Merge.Species}
+
+allBirds <- bind_rows(RWBL_ME_ebd, OSPR_ME_ebd, WODU_ME_ebd)
+
+allBirds <- allBirds %>% 
+  mutate(observations_per_min = observation_count/duration_minutes,
+         Week = week(observation_date), 
+         Presence = 1)
+
+summary(allBirds$observations_per_min)
+
+
+
+allBirds_obvPerMin <- allBirds %>% 
+  filter( is.na(observations_per_min) == FALSE) %>% 
+  filter( observations_per_min != Inf)
+
+summary(allBirds_obvPerMin$observations_per_min)
+
+allBirds_MYgrouped <- 
+  allBirds %>%
+  group_by(common_name, Month_Year) %>% 
+  summarize(state = first(state),
+            observation_count_sum = sum(observation_count),
+            presence_count = sum(Presence)
+            ) 
+# observations per minute (OPM)
+allBirds_MYgrouped_OPM <- 
+  allBirds_obvPerMin %>%
+  group_by(common_name, Month_Year) %>% 
+  summarize(state = first(state),
+            observation_count_sum = sum(observation_count),
+            presence_count = sum(Presence),
+            observation_per_min_avg = mean(observations_per_min)
+            ) 
+
+#Observations, corrected for effort
+#Observations / Effort
+
+allBirds_WeekGrouped <- allBirds %>%
+  group_by(common_name, Week) %>% 
+  summarize(state = first(state),
+            observation_count_sum = sum(observation_count),
+            presence_count = sum(Presence)
+            ) 
+plotweek <- ggplot(allBirds_WeekGrouped, aes(x = Week, y = presence_count)) + geom_point(aes(color = common_name))
+print(plotweek)
+
 
 ```
