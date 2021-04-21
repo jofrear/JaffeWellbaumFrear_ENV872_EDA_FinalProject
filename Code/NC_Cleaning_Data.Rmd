@@ -11,11 +11,13 @@ editor_options:
 library(tidyverse)
 library(ggplot2)
 library(auk)
+library(agricolae)
 #install.packages("lubridate")
 library(lubridate)
 library(colormap)
 library(ggridges)
 library(RColorBrewer)
+library(corrplot)
 
 # set wd
 knitr::opts_knit$set( root.dir = 
@@ -112,6 +114,7 @@ allBirds_YMgrouped_OPM <-
 
 
 
+
 ```
 
 ```{r weather data clean}
@@ -205,7 +208,6 @@ birdsWeather_YM_OPM <- full_join(allBirds_YMgrouped_OPM, weather_YM,
 
 ```{r Plots}
 
-
 # presence count by date, colored by temperature
 ggplot(birdsWeather_YM, aes(x = Year_Month,
                             y = presence_count,
@@ -279,9 +281,133 @@ ggplot(birdsWeather_YM_OPM, aes(x = AvgMonthlyTemp_Statewide,
 
 # In this plot, I've controlled for the skew introduced by more eBird observations being made in the later half of the study period. In April, we see that Wood Ducks (but not the other species) declined in observations (relative to effort) in years where April was warmer. Conversely, more Wood Ducks were observed (per minute of observation) in June during years with warmer June temperatures.
 
+```
+
+> Question: Do the average monthly observations per minute for either Osprey, Red Winged Blackbird, or Wood Duck change with average monthly temperature between 2010 and 2019?
+
+> Does the relationship between average monthly temperature and bird observations (per minute) change depending on month? That is, does temperature have a stronger effect on bird populations in particular months?
+
+> Hypothesis: warmer temperatures will result in less birds, effect of temperature will depend on month. 
+
+```{r Statistical Analyses - Linear Regressions}
+
+##### Are year and temperature correlated? #################
+cor.test(birdsWeather_YM_OPM$Year, birdsWeather_YM_OPM$AvgMonthlyTemp_Statewide)
+# No...
+
+#### correlation plots!
+## Osprey
+ospreyOnly <- birdsWeather_YM_OPM %>%
+                          # filter to bird of interest
+                          filter(common_name == "Osprey")
+# exclude non-numeric columns with [,4:9]
+corMatrix_osprey <- cor(ospreyOnly[,4:9])
+corrplot(corMatrix_osprey, method = "color")
+
+
+## Red winged Blackbird 
+rwbbOnly <- birdsWeather_YM_OPM %>% 
+                          filter(common_name == "Red-winged Blackbird")
+corMatrix_rwbb <- cor(rwbbOnly[,4:9])
+corrplot(corMatrix_rwbb, method = "color")
+
+
+## Wood Duck
+woodduckOnly <- birdsWeather_YM_OPM %>% 
+                          filter(common_name == "Wood Duck")
+corMatrix_woodduck <- cor(woodduckOnly[,4:9])
+corrplot(corMatrix_woodduck, method = "color")
+
+
+##### Linear Regression #########################
+
+### Osprey ###########
+# Observations per minute vs. Temperature, Year, and Month
+# as an lm()
+lm_osprey <- lm(data = birdsWeather_YM_OPM %>% filter(common_name == "Osprey"),
+                observation_per_min_avg ~ AvgMonthlyTemp_Statewide + 
+                  # have to convert month and year to factors - I think?
+                  as.factor(Year) + as.factor(Month))
+# summarize output
+summary(lm_osprey)
+# stepwise selection of most parsimonious model
+step(lm_osprey)
+
+# as an aov()
+aov_osprey <- aov(data = birdsWeather_YM_OPM %>% filter(common_name == "Osprey"),
+                observation_per_min_avg ~ 
+                  as.factor(Year) + as.factor(Month))
+
+summary(aov_osprey)
+
+# post analysis Tukey Test, only run with categorical explanatory variables.
+# this post analysis test will reveal which groups of years and/or 
+# months had similar observations of birds
+TukeyHSD(aov_osprey)
+
+# create and print group labels - for Month
+osprey.groups.yr <- 
+  HSD.test(aov_osprey, "as.factor(Year)", group = TRUE)
+osprey.groups.yr
+
+# create and print group labels - for Year
+osprey.groups.month <- 
+  HSD.test(aov_osprey, "as.factor(Month)", group = TRUE)
+osprey.groups.month
+
+
+### Red winged Blackbird ###########
+lm_rwbb <- lm(data = birdsWeather_YM_OPM %>% filter(common_name == "Red-winged Blackbird"),
+                observation_per_min_avg ~ AvgMonthlyTemp_Statewide + as.factor(Year) + as.factor(Month))
+
+summary(lm_rwbb)
+
+step(lm_rwbb)
+
+# stepwise selection suggests a model with only month is the most parsimonious 
+lm_rwbb_monthOnly <- lm(data = birdsWeather_YM_OPM %>% filter(common_name == "Red-winged Blackbird"),
+                observation_per_min_avg ~ as.factor(Month))
+
+summary(lm_rwbb_monthOnly)
+
+# run as AOV
+aov_rwbb <- aov(data = birdsWeather_YM_OPM %>% filter(common_name == "Red-winged Blackbird"),
+                observation_per_min_avg ~ as.factor(Month))
+
+summary(aov_rwbb)
+
+# post analysis Tukey Test, only run with categorical explanatory variables.
+# this post analysis test will reveal which groups of years and/or 
+# months had similar observations of birds
+TukeyHSD(aov_rwbb)
+
+# create and print group labels - for Month
+rwbb.groups.month <- 
+  HSD.test(aov_osprey, "as.factor(Month)", group = TRUE)
+rwbb.groups.month
+
+### Wood Duck ###########
+lm_duck <- lm(data = birdsWeather_YM_OPM %>% filter(common_name == "Wood Duck"),
+                observation_per_min_avg ~ AvgMonthlyTemp_Statewide + Year + Month)
+
+summary(lm_duck)
+
+step(lm_duck)
+# stepwise selection indicates no variables should be removed from model
+# No Tukey HSD is run for this model because it includes a continuous numerical variable (Temperature)
 
 
 ```
+
+> Draft Written Summary/Notes about Linear regressions:
+
+> Osprey: The most parisimonious model for the Osprey observations (corrected for effort) included year and month as explanatory variables, but not temperature. This model explained *68%* of the variation in Osprey observations. Like the Blackbird, the spring and summar months had similar observations (Group ab: April, May, June, August) which were statistically different than the mean of observations in fall and winter months (Group cd: September, October, November, December). 
+
+> Red-Winged Blackbird: The most parisimonious model for the Blackbird observations (corrected for effort) included only month as an explanatory variable. This model explained only 18.9% of the variation in Blackbird observations. Like the Osprey, the spring and summar months had similar observations of Blackbird (Group ab: April, May, June, August) which were statistically different than the mean of observations in fall and winter months (Group cd: September, October, November, December). 
+
+> Wood Duck: The most parisimonious model for the Wood Duck observations (corrected for effort) included temperature, year and month as explanatory variables. Together, these variables explain only 5.6% of the variation in wood duck observations. For every 1 degree *increase* in temperature (with month and year held constant) we would expect the observations of wood ducks (per minute of observation) to *decrease* by .00072 duck per minute observation. There is likely some other variable, not measured here, explaining the variation in wood duck observations in North Carolina between 2010 and 2020.
+
+> Overall, the Wood Duck appears to be the only bird of the three examined in this study for which average monthly temperature has a statistically significant relationship with bird abundance (corrected for observation effort). The Month of the Year was included in the final model for all three birds, and observations tended to be most similar in non-migratory periods (namely late spring to summer and late fall to winter).
 
 
 ### Analysis: Date of First and Last Annual Observations
