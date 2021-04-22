@@ -10,10 +10,12 @@ output: html_document
 library(tidyverse)
 library(ggplot2)
 library(auk)
+library(agricolae)
 library(lubridate)
 library(colormap)
 library(ggridges)
 library(RColorBrewer)
+library(corrplot)
 
 # ggplot theme
 mytheme <- theme_classic( base_size = 14) + 
@@ -38,15 +40,35 @@ OSPR_ME_month$Month_Year <- as.Date(OSPR_ME_month$Month_Year)
 WODU_ME_month$Month_Year <- as.Date(WODU_ME_month$Month_Year)
 RWBL_ME_month$Month_Year <- as.Date(RWBL_ME_month$Month_Year)
 
+WODU_ME_month$Common_Name = "Wood Duck"
+WODU_ME_month$State = "Maine"
+RWBL_ME_month$Common_Name = "Red-Winged Blackbird"
+RWBL_ME_month$State = "Maine"
+
+Allbirds_ME <- read.csv("../Data/Processed/Allbirds_ME.csv")
+str(Allbirds_ME)
+Allbirds_ME$observation_date <- as.Date(Allbirds_ME$observation_date)
+Allbirds_ME$Month_Year <- as.Date(Allbirds_ME$Month_Year)
+Allbirds_ME$Week_Year <- as.Date(Allbirds_ME$Week_Year)
+
+
+#Allbirds_ME[is.na(Allbirds_ME)] <- 0
+
+OSPR_ME_firstlast <- read.csv("../Data/Processed/Maine/OSPR_ME_firstlast.csv")
+WODU_ME_firstlast <- read.csv("../Data/Processed/Maine/WODU_ME_firstlast.csv")
+RWBL_ME_firstlast <- read.csv("../Data/Processed/Maine/RWBL_ME_firstlast.csv")
+
+view(OSPR_ME_month)
 #simple linear model, R2 = 0.48
-model1 <- lm(data = OSPR_ME_month2, Observations ~ Temperature + Month_Year)
+model1 <- lm(data = OSPR_ME_month, observation_count_sum ~ Mean_Temperature)
 summary(model1)
 
-model2 <- lm(data = WODU_ME_month2, Observations ~ Temperature + Month_Year)
+model2 <- lm(data = WODU_ME_month, observation_count_sum ~ Mean_Temperature)
 summary(model2)
 
-model3 <- lm(data = RWBL_ME_month2, Observations ~ Temperature + Month_Year)
+model3 <- lm(data = RWBL_ME_month, observation_count_sum ~ Mean_Temperature)
 summary(model3)
+  
 ```
 
 Earliest Date every year for each bird each year
@@ -54,15 +76,82 @@ Last Observation ""
 
 Time Series
  - then pare out trends
+ 
+```{r Time.Series}
+#Osprey
+OSPR.ts <- ts(OSPR_ME_month$observation_per_min_avg, 
+                             start = c(2010,1), frequency = 12)
+
+OSPR.ts.decomposed <- stl(OSPR.ts, s.window = "periodic")
+# Visualize the decomposed series. 
+plot(OSPR.ts.decomposed)
+
+monthly_OSPR_trend <- Kendall::SeasonalMannKendall(OSPR.ts)
+summary(monthly_OSPR_trend)
+
+OSPR.ts.components <- as.data.frame(OSPR.ts.decomposed$time.series[,1:3])
+
+
+#Red-winged Blackbird
+
+RWBL.ts <- ts(RWBL_ME_month$observation_per_min_avg, 
+                             start = c(2010,1), frequency = 12)
+
+RWBL.ts.decomposed <- stl(RWBL.ts, s.window = "periodic")
+# Visualize the decomposed series. 
+plot(RWBL.ts.decomposed)
+
+monthly_RWBL_trend <- Kendall::SeasonalMannKendall(RWBL.ts)
+summary(monthly_RWBL_trend)
+
+RWBL.ts.components <- as.data.frame(RWBL.ts.decomposed$time.series[,1:3])
+
+## Wood Duck
+
+WODU.ts <- ts(WODU_ME_month$observation_per_min_avg, 
+                             start = c(2010,1), frequency = 12)
+
+WODU.ts.decomposed <- stl(WODU.ts, s.window = "periodic")
+# Visualize the decomposed series. 
+plot(WODU.ts.decomposed)
+
+monthly_WODU_trend <- Kendall::SeasonalMannKendall(WODU.ts)
+summary(monthly_WODU_trend)
+
+WODU.ts.components <- as.data.frame(WODU.ts.decomposed$time.series[,1:3])
 
 LM
 
-``` {r}
+``` 
 
-OSPR_ME_dates <- read.csv("./Data/Processed/Maine/OSPR_ME_firstlast.csv")
-WODU_ME_dates <- read.csv("./Data/Processed/Maine/WODU_ME_firstlast.csv")
-RWBL_ME_dates <- read.csv("./Data/Processed/Maine/RWBL_ME_firstlast.csv")
+```{r}
+## Visualize Data
 
+ggplot(Allbirds, aes(x = observation_date, y = Week, color = common_name, fill = common_name)) + 
+  geom_line(aes(y = observation_count))
+
+
+
+
+
+###########cates########
+### Birds, ungrouped
+# basic density plot across all years, faceted 
+ggplot(allBirds, aes(x = observation_date, fill = common_name, color = common_name)) +
+  geom_density(alpha = .2) + 
+  facet_wrap(vars(common_name), nrow = 1, ncol = 3) + 
+  theme( legend.position = "none",
+         axis.text.x = element_text(angle = 45,
+                                    hjust = 1))
+#  scale_x_date(limits = c(as.Date("2015-01-01"), as.Date("2015-12-31")))
+
+# basic density plot of observations across all years, unfaceted 
+ggplot(allBirds, aes(x = observation_date, fill = common_name, color = common_name)) +
+  geom_density(alpha = .2)
+
+# as a ridgeplot
+ggplot(Allbirds_ME, aes(x = observation_date, y = common_name, fill = common_name, color = common_name)) + 
+  geom_density_ridges(alpha = .8) 
 
 
 ```
