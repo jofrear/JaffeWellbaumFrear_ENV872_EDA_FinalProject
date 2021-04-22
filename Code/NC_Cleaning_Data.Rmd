@@ -10,7 +10,8 @@ editor_options:
 # Library
 library(tidyverse)
 library(ggplot2)
-library(auk)
+library(scales)
+library(auk) # eBird Package
 library(agricolae)
 #install.packages("lubridate")
 library(lubridate)
@@ -27,10 +28,9 @@ knitr::opts_knit$set( root.dir =
 getwd()
 
 # ggplot theme
-mytheme <- theme_classic( base_size = 14) + 
+mytheme <- theme_light( base_size = 14) + 
   theme( axis.text = element_text( color = "#222222ff"),
          legend.position = "top",
-         # remove legend title
          # margins (top,right,bottom,left)
          axis.title.x = element_text( color = "black",
                                     margin = margin(20,0,0,0)),
@@ -112,9 +112,6 @@ allBirds_YMgrouped_OPM <-
             observation_per_min_avg = mean(observations_per_min)
             ) 
 
-
-
-
 ```
 
 ```{r weather data clean}
@@ -142,16 +139,26 @@ ggplot(allBirds, aes(x = observation_date, fill = common_name, color = common_na
   facet_wrap(vars(common_name), nrow = 1, ncol = 3) + 
   theme( legend.position = "none",
          axis.text.x = element_text(angle = 45,
-                                    hjust = 1))
+                                    hjust = 1)) + 
+  # disable scientific notation in y axis
+  # set color and fill manually
+  scale_color_brewer( palette = "Dark2") + 
+  scale_fill_brewer( palette = "Dark2") + 
+  # make labels legible
+  labs(x = "Observation Date")
 #  scale_x_date(limits = c(as.Date("2015-01-01"), as.Date("2015-12-31")))
 
-# basic density plot of observations across all years, unfaceted 
-ggplot(allBirds, aes(x = observation_date, fill = common_name, color = common_name)) +
-  geom_density(alpha = .2)
 
 # as a ridgeplot
 ggplot(allBirds, aes(x = observation_date, y = common_name, fill = common_name, color = common_name)) + 
-  geom_density_ridges(alpha = .8) 
+  geom_density_ridges(alpha = .2) + 
+  theme(legend.position = "none",
+        axis.title.y = element_blank()) + 
+  scale_color_brewer( palette = "Dark2") + 
+  scale_fill_brewer( palette = "Dark2") + 
+  labs(x = "Observation Date",
+       title = "Density Plot of Bird Appearences on eBird Checklists",
+       subtitle = "2010 - 2020")
 
 # crazy looking ridgeplot for all counties
 ggplot(allBirds, aes(x = observation_date, y = county, fill = common_name, color = common_name)) + 
@@ -164,6 +171,21 @@ ggplot(allBirds, aes(x = observation_date, y = county, fill = common_name, color
 ggplot(allBirds_YMgrouped, aes(x = Year_Month, y = presence_count, group = common_name, color = common_name)) +
   geom_line(alpha = .8) 
 
+### Bird Presence (corrected for effort), monthly 
+# uses grouped data
+ggplot(allBirds_YMgrouped_OPM, aes(x = Year_Month, y = observation_per_min_avg, group = common_name, color = common_name)) +
+  geom_line(alpha = .8) + 
+  facet_wrap(vars(common_name), nrow = 1, ncol = 3) + 
+  theme( legend.position = "none",
+         axis.text.x = element_text(angle = 45,
+                                    hjust = 1)) + 
+  # disable scientific notation in y axis
+  # set color and fill manually
+  scale_color_brewer( palette = "Dark2") + 
+  scale_fill_brewer( palette = "Dark2") + 
+  # make labels legible
+  labs(x = "Observation Date") + 
+  scale_y_log10()
 
 ```
 
@@ -208,28 +230,55 @@ birdsWeather_YM_OPM <- full_join(allBirds_YMgrouped_OPM, weather_YM,
 
 ```{r Plots}
 
-# presence count by date, colored by temperature
-ggplot(birdsWeather_YM, aes(x = Year_Month,
-                            y = presence_count,
-                            color = AvgMonthlyTemp_Statewide)) + 
-  geom_point() + 
-  scale_color_colormap(colormap = "temperature") +
-  facet_wrap(vars(common_name))  + 
-  labs(y = "Number of Times Bird Appeared in a Checklist",
-       x = "Year",
-       color = "Average Monthly Temperature (F):") 
-
-# same as above, using observations per minute instead
+#  observations per minute to overtime, by temperature
 ggplot(birdsWeather_YM_OPM, aes(x = Year_Month,
+                            y = log10(observation_per_min_avg))) + 
+  geom_line(lwd = .8) + 
+  facet_wrap(vars(common_name), nrow = 3, scale = "free") + 
+  theme(legend.position = "bottom") + 
+#  scale_y_log10() + 
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y") + 
+  labs(y = "Average Observations per Minute of Observation (log10)",
+       x = "Year",
+       title = "Bird Observations in North Carolina",
+       subtitle = "2010 - 2020")
+
+#  observations per minute over months,  color by temperature, facet by year
+ggplot(birdsWeather_YM_OPM, aes(x = as.factor(Month),
                             y = observation_per_min_avg,
                             color = AvgMonthlyTemp_Statewide)) + 
-  geom_point() + 
+  geom_line() + 
   scale_color_colormap(colormap = "temperature") +
-  facet_wrap(vars(common_name)) + 
+  facet_wrap(vars(common_name) ~ vars(as.factor(Year)) ) + 
+  theme(legend.position = "bottom") + 
   scale_y_log10() + 
   labs(y = "Average Observations per Minute of Observation (log10)",
        x = "Year",
-       color = "Average Monthly Temperature (F):")
+       color = "Average Monthly\nTemperature (F):",
+       title = "Bird Observations in NC 2010 - 2020 by \nAverage Monthly Temperature (F)")
+  
+# with temperature as x axis and Year as color blocks
+#  observations per minute to overtime, by temperature
+ggplot(birdsWeather_YM_OPM %>% filter(Year != 2021),
+       aes(x = AvgMonthlyTemp_Statewide,
+           y = observation_per_min_avg,
+           color = AvgMonthlyTemp_Statewide) ) + 
+  geom_point(alpha = .7) +
+  scale_color_brewer() + 
+ # scale_color_colormap(colormap = "temperature") +
+  # facet
+  facet_wrap(vars(common_name)) + 
+  # remove legend
+  theme(legend.position = "bottom") + 
+  # log10 scale
+  scale_y_log10() + 
+  # labels
+  labs(y = "Average Observations per Minute of Observation (log10)",
+       x = "Average Monthly Temperature",
+       color = "Average Monthly\nTemperature (F):",
+       title = "Bird Observations vs. Average Monthly Temperature (F)",
+       subtitle = "2010 - 2020")
+
 
 # presence count by temperature
 ggplot(birdsWeather_YM, aes(x = AvgMonthlyTemp_Statewide,
@@ -269,15 +318,14 @@ ggplot(birdsWeather_YM, aes(x = AvgMonthlyTemp_Statewide,
 
 ### plot as above (presence count by temperature, visualized by month) with observations per minute
 ggplot(birdsWeather_YM_OPM, aes(x = AvgMonthlyTemp_Statewide,
-                            y = observation_per_min_avg,
+                            y = log10(observation_per_min_avg),
                             color = common_name)) + 
   geom_point() + 
   geom_smooth(method = "lm", se = FALSE) + 
   facet_wrap(vars(Month),
              scales = "free") + 
   labs(y = "Average Observations per Minute of Observation (log10)",
-       x = "Average Temperature (F), Statewide") + 
-  scale_y_log10()
+       x = "Average Temperature (F), Statewide") 
 
 # In this plot, I've controlled for the skew introduced by more eBird observations being made in the later half of the study period. In April, we see that Wood Ducks (but not the other species) declined in observations (relative to effort) in years where April was warmer. Conversely, more Wood Ducks were observed (per minute of observation) in June during years with warmer June temperatures.
 
@@ -291,7 +339,7 @@ ggplot(birdsWeather_YM_OPM, aes(x = AvgMonthlyTemp_Statewide,
 
 ```{r Statistical Analyses - Linear Regressions}
 
-##### Are year and temperature correlated? #################
+##### Correlation Plots #################
 cor.test(birdsWeather_YM_OPM$Year, birdsWeather_YM_OPM$AvgMonthlyTemp_Statewide)
 # No...
 
@@ -319,7 +367,7 @@ corMatrix_woodduck <- cor(woodduckOnly[,4:9])
 corrplot(corMatrix_woodduck, method = "color")
 
 
-##### Linear Regression #########################
+##### Linear Regression: #########################
 
 ### Osprey ###########
 # Observations per minute vs. Temperature, Year, and Month
@@ -463,6 +511,9 @@ ggplot(allBirds_FirstLast_piv, aes(x = Year, y = Day, color = first_or_last)) +
 
 ```
 
+```{r}
+
+```
 
 
 

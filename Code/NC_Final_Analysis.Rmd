@@ -1,0 +1,344 @@
+---
+title: "North Carolina Final Analysis"
+author: "Cate Jaffe"
+date: "4/21/2021"
+output: pdf_document
+editor_options:
+  chunk_output_type: console
+---
+
+### Setup
+```{r setup}
+
+##### Library #####
+library(tidyverse)
+library(ggplot2)
+library(scales)
+library(auk) # eBird Package
+library(agricolae) 
+library(lubridate)
+library(corrplot)
+library(colormap)
+library(ggridges)
+library(RColorBrewer)
+
+# set working directory for knitting
+knitr::opts_knit$set( root.dir = 
+                        "/Users/Kate/Documents/1.Spring 2021/JaffeWellbaumFrear_ENV872_EDA_FinalProject",
+                  tidy.opts = list(width.cutoff = 60),
+                  tidy = TRUE)
+# check wd
+getwd()
+
+# set ggplot theme
+mytheme <- theme_light( base_size = 14) + 
+  theme( axis.text = element_text( color = "#222222ff"),
+         legend.position = "top",
+         # margins (top,right,bottom,left)
+         axis.title.x = element_text( color = "black",
+                                    margin = margin(20,0,0,0)),
+         axis.title.y = element_text( color = "black",
+                                    margin = margin(0,20,0,0)))
+theme_set(mytheme)
+```
+
+### Import Data
+```{r data import}
+# import bird data
+# eBird data is in text format, package "auk" used to convert to dataframe
+woodduck <- read_ebd("./Data/Raw/NorthCarolina/ebd_US-NC_wooduc_relFeb-2021/ebd_US-NC_wooduc_relFeb-2021.txt")
+rwbbird <- read_ebd("./Data/Raw/NorthCarolina/ebd_US-NC_rewbla_relMar-2021/ebd_US-NC_rewbla_relMar-2021.txt")
+osprey <- read_ebd("./Data/Raw/NorthCarolina/ebd_US-NC_osprey_relFeb-2021/ebd_US-NC_osprey_relFeb-2021.txt")
+
+# import temperature data
+temp <- read.csv("./Data/Raw/NorthCarolina/NCTemperature20102021.csv") %>% unique()
+
+```
+
+### Data Cleaning
+```{r bird data clean}
+
+### create merged dataset of all bird data
+allBirds <- bind_rows(woodduck, rwbbird, osprey)
+
+### clean
+allBirds <- allBirds %>%
+  # filter dates to date range of interest: 2010 - 2021
+  filter(year(observation_date) > 2009 & year(observation_date) < 2022) %>%
+  # select only columns of interest
+  select(common_name:observation_count, state, county,
+                                      latitude:time_observations_started, protocol_type,
+                                      duration_minutes:number_observers,
+                                      all_species_reported) %>% 
+    # change "X" value in observation_count to 1 (X represents "present" in eBird)
+    # change to numeric variable after converting to X
+    mutate(observation_count = as.numeric(replace(observation_count, observation_count == 'X', '1')),
+           # add column which divides # observations per minute observation
+           # this controls for birding "effort" which was much higher in later years (2015-2020)
+           observations_per_min = observation_count/duration_minutes,
+           # add column for "Year-Month" using floor_date from lubridate
+           Year_Month = floor_date(observation_date, unit = "month"),
+           # add binary presence column
+           Presence = 1) %>% 
+  # Some "observations per minute" values are NA or Inf where the duration of observation was 0 minutes or was missing. Exclude NA and Inf values
+  filter( is.na(observations_per_min) == FALSE) %>% 
+  filter( observations_per_min != Inf)
+  # Removing NA and Inf values removes about 10,000 observations, or ~6% of the data.
+
+### check distribution of new "observations per minute" variable
+summary(allBirds$observations_per_min)
+# plot regular distribution:
+# heavy right skew in data
+ggplot(allBirds, aes(x=observations_per_min)) + 
+  geom_density() 
+# log transformation looks more normal
+ggplot(allBirds, aes(x=log10(observations_per_min))) + 
+  geom_density() 
+
+
+### Create grouped dataset, with observations per minute averaged by year-month
+allBirds_YMgrouped <- 
+  allBirds %>%
+  group_by(common_name, Year_Month) %>% 
+  summarize(state = first(state),
+            observation_count_sum = sum(observation_count),
+            # sum presence column: how many times did bird appear on a checklist?
+            presence_count = sum(Presence),
+            # average obsv/min: how many times was the bird observed, corrected for effort
+            observation_per_min_avg = mean(observations_per_min)
+            ) 
+
+```
+
+```{r temperature data cleaning}
+
+# group by month & year
+temp_YM <- temp %>% 
+  # omit NAs
+  na.omit() %>% 
+  # make Year-Month column
+  mutate( Year_Month = ydm((paste0(Year,"-01-",Month)))) %>% 
+  group_by(Year_Month) %>% 
+  # take statewide average
+  summarise(AvgMonthlyTemp_Statewide = mean(AvgMonthlyTemp)) %>% 
+  # re-add month and year columns
+  mutate(Month = month(Year_Month),
+         Year = year(Year_Month))
+
+  
+```
+
+### Data Exploration
+```{r bird exploratory plots}
+
+### Birds, ungrouped, uncorrected for effort
+# basic density plot across all years, faceted 
+ggplot(allBirds, aes(x = observation_date, fill = common_name, color = common_name)) +
+  geom_density(alpha = .2) + 
+  facet_wrap(vars(common_name), nrow = 1, ncol = 3) + 
+  theme( legend.position = "none",
+         axis.text.x = element_text(angle = 45,
+                                    hjust = 1)) + 
+  # disable scientific notation in y axis
+  # set color and fill manually
+  scale_color_brewer( palette = "Dark2") + 
+  scale_fill_brewer( palette = "Dark2") + 
+  # make labels legible
+  labs(x = "Observation Date")
+
+### Birds, grouped by year-month, corrected for effort
+ggplot(allBirds_YMgrouped %>% filter(year(Year_Month) != 2021),
+       aes(x = Year_Month, y = log10(observation_per_min_avg), group = common_name, color = common_name)) +
+  geom_line(alpha = .8) + 
+  facet_wrap(vars(common_name), nrow = 1, ncol = 3) + 
+  theme( legend.position = "none",
+         axis.text.x = element_text(angle = 45,
+                                    hjust = 1)) + 
+  # disable scientific notation in y axis
+  # set color and fill manually
+  scale_color_brewer( palette = "Dark2") + 
+  scale_fill_brewer( palette = "Dark2") + 
+  # make labels legible
+  labs(x = "Observation Date")
+
+```
+
+```{r temperature exploratory plots}
+
+# Temperature trends by year-month groups
+ggplot(temp_YM %>% filter(Year != 2021), aes(x = Year_Month, y = AvgMonthlyTemp_Statewide, color = AvgMonthlyTemp_Statewide)) +
+  geom_point(alpha = .4) +
+  geom_line(alpha = .8) + 
+  scale_x_date(breaks = "6 months",
+                date_labels = "%b %Y") + 
+  theme(axis.text.x = element_text(angle = 45,
+                                   hjust = 1),
+        legend.position = "none") + 
+  scale_color_colormap(colormap = "plasma") + 
+  labs(y = "Average Monthly Temperature (F)",
+       x = "Date")
+  
+
+```
+
+### Join Bird and Temperature Data
+
+```{r join temp and bird data}
+
+birdsTemp_YM <- full_join(allBirds_YMgrouped, temp_YM, 
+                             by = "Year_Month")
+
+```
+
+### Analysis: Bird Observations & Temperature
+
+```{r Plots}
+
+#  observations per minute to overtime, by temperature
+ggplot(birdsTemp_YM %>% filter(Year != 2021), 
+       aes(x = Year_Month, y = log10(observation_per_min_avg),
+           color = AvgMonthlyTemp_Statewide)) + 
+  geom_line(lwd = .8) + 
+  facet_wrap(vars(common_name), nrow = 3, scale = "free") + 
+  theme(legend.position = "right") + 
+  scale_color_colormap(colormap = "plasma") + 
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y") + 
+  labs(y = "Average Birds per Minute of Observation (log10)",
+       x = "Year",
+       color = "Average Monthly \nTemperature (F)",
+       title = "Bird Observations in North Carolina",
+       subtitle = "2010 - 2020")
+
+
+```
+
+# Correlation Plots
+
+```{r corr plots}
+
+## Osprey
+ospreyOnly <- birdsTemp_YM %>%
+# filter to bird of interest                     
+  filter(common_name == "Osprey")
+
+# exclude non-numeric columns with [,4:9]
+corMatrix_osprey <- cor(ospreyOnly[,4:9])
+corrplot(corMatrix_osprey, method = "color")
+
+
+## Red winged Blackbird 
+rwbbOnly <- birdsTemp_YM %>%
+  filter(common_name == "Red-winged Blackbird")
+
+corMatrix_rwbb <- cor(rwbbOnly[,4:9])
+corrplot(corMatrix_rwbb, method = "color")
+
+
+## Wood Duck
+woodduckOnly <- birdsTemp_YM %>%
+  filter(common_name == "Wood Duck")
+
+corMatrix_woodduck <- cor(woodduckOnly[,4:9])
+corrplot(corMatrix_woodduck, method = "color")
+
+```
+
+```{r Statistical Analyses - Linear Regressions}
+
+### Osprey ###########
+# Observations per minute vs. Temperature, Year, and Month
+# as an lm()
+lm_osprey <- lm(data = birdsWeather_YM_OPM %>% filter(common_name == "Osprey"),
+                observation_per_min_avg ~ AvgMonthlyTemp_Statewide + 
+                  # have to convert month and year to factors 
+                  as.factor(Year) + as.factor(Month))
+# summarize output
+summary(lm_osprey)
+# stepwise selection of most parsimonious model
+step(lm_osprey)
+
+# as an aov()
+aov_osprey <- aov(data = birdsWeather_YM_OPM %>% filter(common_name == "Osprey"),
+                observation_per_min_avg ~ 
+                  as.factor(Year) + as.factor(Month))
+
+summary(aov_osprey)
+
+# post analysis Tukey Test, only run with categorical explanatory variables.
+# this post analysis test will reveal which groups of years and/or 
+# months had similar observations of birds
+TukeyHSD(aov_osprey)
+
+# create and print group labels - for Month
+osprey.groups.yr <- 
+  HSD.test(aov_osprey, "as.factor(Year)", group = TRUE)
+osprey.groups.yr
+
+# create and print group labels - for Year
+osprey.groups.month <- 
+  HSD.test(aov_osprey, "as.factor(Month)", group = TRUE)
+osprey.groups.month
+
+
+### Red winged Blackbird ###########
+lm_rwbb <- lm(data = birdsWeather_YM_OPM %>% filter(common_name == "Red-winged Blackbird"),
+                observation_per_min_avg ~ AvgMonthlyTemp_Statewide + as.factor(Year) + as.factor(Month))
+
+summary(lm_rwbb)
+
+step(lm_rwbb)
+
+# stepwise selection suggests a model with only month is the most parsimonious 
+lm_rwbb_monthOnly <- lm(data = birdsWeather_YM_OPM %>% filter(common_name == "Red-winged Blackbird"),
+                observation_per_min_avg ~ as.factor(Month))
+
+summary(lm_rwbb_monthOnly)
+
+# run as AOV
+aov_rwbb <- aov(data = birdsWeather_YM_OPM %>% filter(common_name == "Red-winged Blackbird"),
+                observation_per_min_avg ~ as.factor(Month))
+
+summary(aov_rwbb)
+
+# post analysis Tukey Test, only run with categorical explanatory variables.
+# this post analysis test will reveal which groups of years and/or 
+# months had similar observations of birds
+TukeyHSD(aov_rwbb)
+
+# create and print group labels - for Month
+rwbb.groups.month <- 
+  HSD.test(aov_osprey, "as.factor(Month)", group = TRUE)
+rwbb.groups.month
+
+### Wood Duck ###########
+lm_duck <- lm(data = birdsWeather_YM_OPM %>% filter(common_name == "Wood Duck"),
+                observation_per_min_avg ~ AvgMonthlyTemp_Statewide + Year + Month)
+
+summary(lm_duck)
+
+step(lm_duck)
+# stepwise selection indicates no variables should be removed from model
+# No Tukey HSD is run for this model because it includes a continuous numerical variable (Temperature)
+
+
+```
+
+> Draft Written Summary/Notes about Linear regressions:
+
+> Osprey: The most parisimonious model for the Osprey observations (corrected for effort) included year and month as explanatory variables, but not temperature. This model explained *68%* of the variation in Osprey observations. Like the Blackbird, the spring and summar months had similar observations (Group ab: April, May, June, August) which were statistically different than the mean of observations in fall and winter months (Group cd: September, October, November, December). 
+
+> Red-Winged Blackbird: The most parisimonious model for the Blackbird observations (corrected for effort) included only month as an explanatory variable. This model explained only 18.9% of the variation in Blackbird observations. Like the Osprey, the spring and summar months had similar observations of Blackbird (Group ab: April, May, June, August) which were statistically different than the mean of observations in fall and winter months (Group cd: September, October, November, December). 
+
+> Wood Duck: The most parisimonious model for the Wood Duck observations (corrected for effort) included temperature, year and month as explanatory variables. Together, these variables explain only 5.6% of the variation in wood duck observations. For every 1 degree *increase* in temperature (with month and year held constant) we would expect the observations of wood ducks (per minute of observation) to *decrease* by .00072 duck per minute observation. There is likely some other variable, not measured here, explaining the variation in wood duck observations in North Carolina between 2010 and 2020.
+
+> Overall, the Wood Duck appears to be the only bird of the three examined in this study for which average monthly temperature has a statistically significant relationship with bird abundance (corrected for observation effort). The Month of the Year was included in the final model for all three birds, and observations tended to be most similar in non-migratory periods (namely late spring to summer and late fall to winter).
+
+### Analysis: Date of First and Last Annual Observations
+
+```{r Visualize first and last observation dates}
+
+
+
+```
+
+
