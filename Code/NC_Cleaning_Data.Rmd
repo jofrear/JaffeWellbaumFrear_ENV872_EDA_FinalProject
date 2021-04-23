@@ -526,7 +526,6 @@ display.brewer.all()
 # Colormap
 scales::show_col(colormap(colormap = colormaps$temperature))
 
-
 ```
 
 
