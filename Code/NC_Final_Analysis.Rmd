@@ -248,7 +248,7 @@ corrplot(corMatrix_woodduck, method = "color")
 ### Osprey ###########
 # Observations per minute vs. Temperature, Year, and Month
 # as an lm()
-lm_osprey <- lm(data = birdsWeather_YM_OPM %>% filter(common_name == "Osprey"),
+lm_osprey <- lm(data = birdsTemp_YM %>% filter(common_name == "Osprey"),
                 observation_per_min_avg ~ AvgMonthlyTemp_Statewide + 
                   # have to convert month and year to factors 
                   as.factor(Year) + as.factor(Month))
@@ -258,7 +258,7 @@ summary(lm_osprey)
 step(lm_osprey)
 
 # as an aov()
-aov_osprey <- aov(data = birdsWeather_YM_OPM %>% filter(common_name == "Osprey"),
+aov_osprey <- aov(data = birdsTemp_YM %>% filter(common_name == "Osprey"),
                 observation_per_min_avg ~ 
                   as.factor(Year) + as.factor(Month))
 
@@ -281,7 +281,7 @@ osprey.groups.month
 
 
 ### Red winged Blackbird ###########
-lm_rwbb <- lm(data = birdsWeather_YM_OPM %>% filter(common_name == "Red-winged Blackbird"),
+lm_rwbb <- lm(data = birdsTemp_YM %>% filter(common_name == "Red-winged Blackbird"),
                 observation_per_min_avg ~ AvgMonthlyTemp_Statewide + as.factor(Year) + as.factor(Month))
 
 summary(lm_rwbb)
@@ -289,13 +289,13 @@ summary(lm_rwbb)
 step(lm_rwbb)
 
 # stepwise selection suggests a model with only month is the most parsimonious 
-lm_rwbb_monthOnly <- lm(data = birdsWeather_YM_OPM %>% filter(common_name == "Red-winged Blackbird"),
+lm_rwbb_monthOnly <- lm(data = birdsTemp_YM %>% filter(common_name == "Red-winged Blackbird"),
                 observation_per_min_avg ~ as.factor(Month))
 
 summary(lm_rwbb_monthOnly)
 
 # run as AOV
-aov_rwbb <- aov(data = birdsWeather_YM_OPM %>% filter(common_name == "Red-winged Blackbird"),
+aov_rwbb <- aov(data = birdsTemp_YM %>% filter(common_name == "Red-winged Blackbird"),
                 observation_per_min_avg ~ as.factor(Month))
 
 summary(aov_rwbb)
@@ -311,7 +311,7 @@ rwbb.groups.month <-
 rwbb.groups.month
 
 ### Wood Duck ###########
-lm_duck <- lm(data = birdsWeather_YM_OPM %>% filter(common_name == "Wood Duck"),
+lm_duck <- lm(data = birdsTemp_YM %>% filter(common_name == "Wood Duck"),
                 observation_per_min_avg ~ AvgMonthlyTemp_Statewide + Year + Month)
 
 summary(lm_duck)
@@ -337,8 +337,102 @@ step(lm_duck)
 
 ```{r Visualize first and last observation dates}
 
+allBirdsTemp <- full_join(allBirds, temp_YM, 
+                             by = "Year_Month")
+
+#Summarize the number of observations by week
+allBirds_week <- allBirdsTemp %>%
+  # make column of "week"
+  mutate(Week = floor_date(observation_date, unit = "week")) %>% 
+  group_by(Week, Year_Month, common_name, state) %>% 
+  summarize(observations_per_min_avg = mean(observations_per_min),
+            Presence = sum(Presence),
+            observation_count_sum = sum(observation_count),
+            AvgWeeklyTemp_F = mean(AvgMonthlyTemp_Statewide)) %>%
+  mutate(Month = month(Year_Month),
+         Year = year(Year_Month)) %>% 
+  filter(Year %in% c(2010:2020)) 
+
+# Plot
+ggplot(allBirds_week, aes(x=month(Week), y=log10(observation_count_sum), color=common_name)) +
+  geom_smooth(method='loess', se=F, lwd=0.8) +
+  scale_color_manual(values=c('#1E88E5', '#D81B60', '#004D40')) + 
+#  scale_y_continuous(n.breaks = 3) +
+  scale_x_continuous(expand = c(0,0), breaks = c(1, 4, 8, 12), labels = c('Jan','Apr', 'Aug', 'Dec')) +
+labs(x='', y='', color='', title='Seasonal Stay by Species Over Time', subtitle = 'North Carolina') +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(), panel.spacing.x = unit(2, 'lines')) +
+  facet_grid(vars(year(Year_Month)), vars(common_name))
 
 
 ```
+
+### Discussion of Seasonal Stays by each species
+> All birds appear to reside in North Carolina year round. Osprey appear most populus in the summer months and almost absent in the winter, with populations potentially increasing overtime between 2010 and 2020. The opposite pattern appears to be true for Blackbird, which is more abundant in the summers and less in the winters, and is generally the most populus of the three birds examined here. Wood Duck appears from this plot to be least seaonsal, and to be present in constant numbers (at State scale) throughout the year. 
+
+> To further investigate seasonal and long-term (2010-2020) trends, we conducted a time-series analysis:
+
+### Time Series Analysis
+
+```{r Time Series}
+
+birdsTemp_YM_ospr <- birdsTemp_YM %>% filter(common_name == "Osprey" & Year %in% c(2010:2020))
+
+birdsTemp_YM_rwbb <- birdsTemp_YM %>% filter(common_name == "Red-winged Blackbird" & Year %in% c(2010:2020))
+
+birdsTemp_YM_wodo <- birdsTemp_YM %>% filter(common_name == "Wood Duck" & Year %in% c(2010:2020))
+
+
+#Osprey
+osprey.ts <- ts(OSPR_ME_month$observation_per_min_avg, 
+                             start = c(2010,1), frequency = 12)
+
+OSPR.ts.decomposed <- stl(OSPR.ts, s.window = "periodic")
+# Visualize the decomposed series. 
+plot(OSPR.ts.decomposed)
+
+monthly_OSPR_trend <- Kendall::SeasonalMannKendall(OSPR.ts)
+summary(monthly_OSPR_trend)
+
+OSPR.ts.components <- as.data.frame(OSPR.ts.decomposed$time.series[,1:3])
+
+
+#Red-winged Blackbird
+
+RWBL.ts <- ts(RWBL_ME_month$observation_per_min_avg, 
+                             start = c(2010,1), frequency = 12)
+
+RWBL.ts.decomposed <- stl(RWBL.ts, s.window = "periodic")
+# Visualize the decomposed series. 
+plot(RWBL.ts.decomposed)
+
+monthly_RWBL_trend <- Kendall::SeasonalMannKendall(RWBL.ts)
+summary(monthly_RWBL_trend)
+
+RWBL.ts.components <- as.data.frame(RWBL.ts.decomposed$time.series[,1:3])
+
+## Wood Duck
+
+WODU.ts <- ts(WODU_ME_month$observation_per_min_avg, 
+                             start = c(2010,1), frequency = 12)
+
+WODU.ts.decomposed <- stl(WODU.ts, s.window = "periodic")
+# Visualize the decomposed series. 
+plot(WODU.ts.decomposed)
+
+monthly_WODU_trend <- Kendall::SeasonalMannKendall(WODU.ts)
+summary(monthly_WODU_trend)
+
+WODU.ts.components <- as.data.frame(WODU.ts.decomposed$time.series[,1:3])
+
+```
+
+
+
+
+
+
+
+
+
 
 

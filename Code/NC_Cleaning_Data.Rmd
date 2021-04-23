@@ -494,7 +494,6 @@ ggplot(allBirds_FirstLast, aes(x = Year, y = date)) +
   geom_line(aes()) + 
   facet_wrap(vars(common_name))
 
-
 # plot with pivot data
 ggplot(allBirds_FirstLast_piv, aes(x = Year, y = DayOfYear, color = first_or_last)) + 
   geom_point() + 
