@@ -1,25 +1,11 @@
 ---
-title: "Massachusetts_Cleaning_Data.Rmd"
+title: "Massachusetts_Analysis"
 author: "Emma Wellbaum"
-date: "4/17/2021"
+date: "4/22/2021"
 output: html_document
 editor_options:
   chunk_output_type: console
 ---
-
-###
-This file is for taking the downloaded ebird data and processing it into summary files. 
-
-NOTE:
-
-I will use 4-letter AOU Bird Codes to refer to species in R. For reference:
-
-Red-winged Blackbird = RWBL
-Osprey = OSPR
-Wood Duck = WODU
-
-(https://www.birdpop.org/pages/birdSpeciesCodes.php)
-
 ## Set up
 
 ```{r setup, include=FALSE}
@@ -148,47 +134,6 @@ MAbirds_temp$Season[MAbirds_temp$Month %in% c(9:11)] <- 4 #Fall
 
 #Save output to csv
 write.csv(MAbirds_temp, row.names = FALSE, './Data/Processed/Massachusetts/MAbirds_temp.csv')
-
-#For the osprey only, it is necessary to tidy the data months of no observations
-OSPR_month$observation_count[is.na(OSPR_month$observation_count)] <- 0
-OSPR_month$observations_per_min_avg[is.na(OSPR_month$observations_per_min_avg)] <- 0
-OSPR_month$presence_count[is.na(OSPR_month$presence_count)] <- 0
-OSPR_month$state <- 'Massachusetts'
-OSPR_month$common_name <-'Osprey'
-
-#Red-winged Blackbird
-RWBL_month <- MAbirds_month %>% 
-  filter(common_name == 'Red-winged Blackbird') %>% 
-  full_join(MA_temp, ., by='Month_Year')
-
-#Wood Duck
-WODU_month <- MAbirds_month %>% 
-  filter(common_name == 'Wood Duck') %>% 
-  full_join(MA_temp, ., by='Month_Year')
-
-## Re-join the species subsets together into a single dataset
-#Joining the temperature data separate allowed the additional tidying of the
-#Osprey data, which is neceasary to maintain a continuous date range
-MAbirds_temp <- bind_rows(OSPR_month, RWBL_month, WODU_month)
-
-
-
-
-
-#Summarize the number of observations by week
-#MAbirds_week <- MAbirds %>%
-  #group_by(Week_Year, Month_Year, common_name, state, Month, Year) %>% 
-  #summarize(WeeklyObs_per_min = mean(observations_per_min),
-           #WeeklyPresence = sum(Presence),
-            #WeeklyObs = sum(observation_count),
-            #AvgMonthlyTemp_F = mean(AvgMonthlyTemp_F)) %>%
-  #ungroup() %>% 
-  #select(common_name, state, WeeklyObs, WeeklyObs_per_min, WeeklyPresence,  Month, Year, Week_Year, Month_Year)
-
-#Combine the weekly and monthly summary columns into a single dataset
-#MAbirds_summary <- left_join(MAbirds_week, MAbirds_month[, c('common_name', 'MonthlyObs', 'MonthlyObs_per_min', 'MonthlyPresence', 'Month_Year')], by= c('Month_Year', 'common_name'))
-
-#write.csv(MAbirds_week, row.names = FALSE, './Data/Processed/Massachusetts/MAbirds_week.csv')
 ```
 
 ## Exploratory Plots
@@ -198,14 +143,13 @@ MAbirds_temp <- bind_rows(OSPR_month, RWBL_month, WODU_month)
 #This plot represents bird observations uncorrected for effort
 ggplot(MAbirds, aes(x = observation_date, fill = common_name, color = common_name)) +
   geom_density(alpha = .2) + 
-  facet_wrap(vars(common_name), nrow = 1, ncol = 3) + 
-  theme(legend.position = "none",
-         axis.text.x = element_text(angle = 45,
-                                    hjust = 1)) + 
-  # set color and fill manually
-  scale_color_brewer( palette = "Dark2") + 
-  scale_fill_brewer( palette = "Dark2") + 
-  # make labels legible
+  facet_wrap(~common_name, ncol = 3) + 
+  theme(legend.position = 'none',
+         axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  #Set color and fill
+  scale_color_brewer( palette = 'Dark2') + 
+  scale_fill_brewer( palette = 'Dark2') + 
+  #Create figure labels
   labs(x = "Observation Date", title="Bird Observation Density by Species",
        subtitle = "Massachusetts: 2010:2020")
 
@@ -214,46 +158,71 @@ ggplot(MAbirds, aes(x = observation_date, fill = common_name, color = common_nam
 ggplot(MAbirds_temp, 
        aes(x=Month_Year, y=log10(observations_per_min_avg), color=AvgMonthlyTemp_F)) +
   geom_line(lwd=0.8) +
+  #Set color to average monthly temperature
   scale_color_viridis(option='plasma') +
+  #Create legible date break labels
   scale_x_date(date_breaks = '1 year', date_labels = '%Y') +
-labs(x='Observation Date', y='Average Observations/Minute (log10)', color='Mean Monthly Temperature (F)', title= 'Effort-Corrected Bird Observations by Species', subtitle = 'Massachusetts: 2010-2020') +
+  #Create figure labels
+  labs(x='Observation Date', 
+       y='Average Observations/Minute (log10)', 
+       color='Mean Monthly Temperature (F)', 
+       title= 'Effort-Corrected Bird Observations by Species', 
+       subtitle = 'Massachusetts: 2010-2020') +
+  #Facet by species
   facet_wrap(~common_name, nrow=3)
 
 #### Cowplot of average observations per minute by year and species ####
 
 #Osprey component plot (controls the y-axis label)
-OSPRplot <- ggplot(filter(MAbirds_temp, common_name == 'Osprey'), aes(x=month(Month_Year), y=log10(observations_per_min_avg), group=year(Month_Year), color=AvgMonthlyTemp_F)) +
+OSPRplot <- ggplot(filter(MAbirds_temp, common_name == 'Osprey'), 
+                   aes(x=month(Month_Year), y=log10(observations_per_min_avg),
+                       group=year(Month_Year), color=AvgMonthlyTemp_F)) +
   geom_line(lwd=0.8) +
+  #Set color to average monthly temperature
   scale_color_viridis(option='plasma') + 
   #scale x and y axes the same for each component plot
   scale_y_continuous(limits = c(-1.75, 0.5), n.breaks = 3) +
-  scale_x_continuous(expand = c(0,0), breaks = c(1, 4, 8, 12), labels = c('Jan','Apr', 'Aug', 'Dec')) +
-labs(x='', y='Average Observations/Minute (log10)', color='', title = 'Osprey') +
-  theme(legend.position='none', title=element_text(size=10), axis.text.y=element_text(size=9), axis.title.y= element_text(size=10), strip.text=element_text(size=9)) +
+  scale_x_continuous(expand = c(0,0), breaks = c(1, 4, 8, 12), 
+                     labels = c('Jan','Apr', 'Aug', 'Dec')) +
+  labs(x='', y='Average Observations/Minute (log10)', color='', title = 'Osprey') +
+  #Create legible figure labels (for the combined cowplot)
+  theme(legend.position='none', title=element_text(size=10), 
+        axis.text.y=element_text(size=9), axis.title.y= element_text(size=10),
+        strip.text=element_text(size=9)) +
+  #Facet by year
   facet_grid(vars(year(Month_Year)))
-print(OSPRplot)
+
 
 #Red-winged Blackbird component plot (controls the legend)
-RWBLplot <- ggplot(filter(MAbirds_temp, common_name == 'Red-winged Blackbird'), aes(x=month(Month_Year), y=log10(observations_per_min_avg), group=year(Month_Year), color=AvgMonthlyTemp_F)) +
+RWBLplot <- ggplot(filter(MAbirds_temp, common_name == 'Red-winged Blackbird'),
+                   aes(x=month(Month_Year), y=log10(observations_per_min_avg),
+                       group=year(Month_Year), color=AvgMonthlyTemp_F)) +
   geom_line(lwd=0.8) +
   scale_color_viridis(option='plasma') + 
   scale_y_continuous(limits = c(-1.75, 0.5), n.breaks = 3) +
-  scale_x_continuous(expand = c(0,0), breaks = c(1, 4, 8, 12), labels = c('Jan','Apr', 'Aug', 'Dec')) +
-labs(x='', y='', color='Average Monthly Temperature (F)', title='Red-winged Blackbird') +
-  theme(legend.position='bottom', title=element_text(size=10), axis.text.y=element_text(size=9), strip.text=element_text(size=9)) +
+  scale_x_continuous(expand = c(0,0), breaks = c(1, 4, 8, 12), 
+                     labels = c('Jan','Apr', 'Aug', 'Dec')) +
+  labs(x='', y='', color='Average Monthly Temperature (F)', 
+       title='Red-winged Blackbird') +
+  theme(legend.position='bottom', title=element_text(size=10),
+        axis.text.y=element_text(size=9), strip.text=element_text(size=9)) +
   facet_grid(vars(year(Month_Year)))
-print(RWBLplot)
+
 
 #Wood Duck component plot
-WODUplot <- ggplot(filter(MAbirds_temp, common_name == 'Wood Duck', year(Month_Year) <2021), aes(x=month(Month_Year), y=log10(observations_per_min_avg), group=year(Month_Year), color=AvgMonthlyTemp_F)) +
+WODUplot <- ggplot(filter(MAbirds_temp, common_name == 'Wood Duck'),
+                          aes(x=month(Month_Year), y=log10(observations_per_min_avg),
+                              group=year(Month_Year), color=AvgMonthlyTemp_F)) +
   geom_line(lwd=0.8) +
   scale_color_viridis(option='plasma') + 
   scale_y_continuous(limits = c(-1.75, 0.5), n.breaks = 3) +
-  scale_x_continuous(expand = c(0,0), breaks = c(1, 4, 8, 12), labels = c('Jan','Apr', 'Aug', 'Dec')) +
-labs(x='', y='', color='', title='Wood Duck') +
-  theme(legend.position='none', title=element_text(size=10), axis.text.y=element_text(size=9), strip.text=element_text(size=9)) +
+  scale_x_continuous(expand = c(0,0), breaks = c(1, 4, 8, 12), 
+                     labels = c('Jan','Apr', 'Aug', 'Dec')) +
+  labs(x='', y='', color='', title='Wood Duck') +
+  theme(legend.position='none', title=element_text(size=10), 
+        axis.text.y=element_text(size=9), strip.text=element_text(size=9)) +
   facet_grid(vars(year(Month_Year)))
-print(WODUplot)
+
 
 #Extract the legend from the RWBL component plot as an object
 birdleg <-get_legend(RWBLplot)
@@ -269,34 +238,9 @@ title <- ggdraw() +
 #Combine the individual species plots into 3-species cowplot
 birdplot <- plot_grid(OSPRplot, RWBLplot + theme(legend.position='none'), WODUplot, align = c('hv'), nrow=1)
                         
-#Add the title to birdplot 
+#Add the title and legend to birdplot 
 birdplot <- plot_grid(title, birdplot, birdleg, ncol = 1, rel_heights = c(.08, 1.2, .15))
 print(birdplot)
-```
-
-
-```{r weekly.sum.plots}
-#Plot Average Observations per Minute for 2010-2021 for All Species
-ggplot(MAbirds_week, 
-       aes(x=Week, y=log(observations_per_min_avg), color=AvgWeeklyTemp_F)) +
-  geom_line(lwd=0.8) +
-  geom_hline(yintercept=-2, lty=2) +
-  scale_color_viridis(option='plasma') +
-  scale_x_date(date_breaks = '1 year', date_labels = '%Y') +
-labs(x='Year', y='log(Observations/Min)', color='Mean Temperature (F)', title= 'Average Observations per Minute of Observation: 2010-2021', subtitle = 'Massachusetts') +
-  theme(legend.position = 'bottom') +
-  facet_wrap(~common_name, nrow=3)
-
-
-#Plot Seasonal Stay in Massachusetts by Species and Year
-ggplot(MAbirds_week) +
-  geom_smooth(aes(x=month(Week), y=log(observations_per_min_avg), color=common_name), method='loess', se=F, lwd=0.8) +
-  scale_color_manual(values=c('#1E88E5', '#D81B60', '#004D40')) + 
-  scale_y_continuous(n.breaks = 3) +
-  scale_x_continuous(expand = c(0,0), breaks = c(1, 4, 8, 12), labels = c('Jan','Apr', 'Aug', 'Dec')) +
-labs(x='', y='', color='', title='Seasonal Stay by Species Over Time', subtitle = 'Massachusetts') +
-  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank(), panel.spacing.x = unit(2, 'lines')) +
-  facet_grid(vars(year(Week)), vars(common_name))
 ```
 
 
@@ -318,16 +262,17 @@ WODU_MA_temp <- MAbirds_temp %>% filter(common_name == "Wood Duck")
 ## Correlation Plots
 > What does the relationship between bird obersations, time, and temperature look like?
 > Which numeric date variables would be most interesting to explore with respect to changes in temperature and bird observations?
+> How are changes in temperature associated with time in Massachusetts?
 
-```{r correlation.plots}
-
+```{r correlation.tests}
 ## Question: How are changes in temperature associated with time in Massachusetts?
 cor.test(MAbirds_temp$Month, MAbirds_temp$AvgMonthlyTemp_F)
 cor.test(MAbirds_temp$Season, MAbirds_temp$AvgMonthlyTemp_F)
 cor.test(MAbirds_temp$Year, MAbirds_temp$AvgMonthlyTemp_F)
+```
+> Answer: Temperature is not associated with year (cor= -0.01547243). This indicates that we would need to download data for a significantly larger date range to observe potential species shifts related to climate change. There are stronger associations between temperature and both month and season (cor=0.2572472 and 0.5924802, respectively). This is expected given the known seasonal variation in Massachusetts.
 
-## Answer: Tempature is not associated with year (cor= -0.01547243). This indicates that we would need to download data for a significantly larger date range to observe potential species shifts related to climate change. There are stronger associations between temperature and both month and season (cor=0.2572472 and 0.5924802, respectively). This is expected given the known seasonal variation in Massachusetts.
-
+```{r correlation.plots}
 # Create correlation plots of the numeric variables in our processed dataset: 
 # observation count, presence, average observations per minute, month, year, temp, and season
 
@@ -363,7 +308,7 @@ corrplot(corMatrix_WODU, method = "color")
 lm_OSPR_month <- lm(data = OSPR_MA_temp,
                 observations_per_min_avg ~ AvgMonthlyTemp_F + 
                 as.factor(Month))
-# summarize output
+#Summarize output
 summary(lm_OSPR_month)
 
 
@@ -371,7 +316,7 @@ summary(lm_OSPR_month)
 lm_OSPR_season <- lm(data = OSPR_MA_temp,
                 observations_per_min_avg ~ AvgMonthlyTemp_F + 
                 as.factor(Season))
-#summarize output
+#Summarize output
 summary(lm_OSPR_season)
 
 #### Red winged Blackbird ####
@@ -387,7 +332,7 @@ summary(lm_RWBL_month)
 lm_RWBL_season <- lm(data = RWBL_MA_temp,
                 observations_per_min_avg ~ AvgMonthlyTemp_F + 
                 as.factor(Season))
-#summarize output
+#Summarize output
 summary(lm_RWBL_season)
 
 
@@ -396,14 +341,15 @@ summary(lm_RWBL_season)
 lm_WODU_month <- lm(data = WODU_MA_temp,
                 observations_per_min_avg ~ AvgMonthlyTemp_F + 
                 as.factor(Month))
-# summarize output
+#Summarize output
 summary(lm_WODU_month)
 
 #Observations per minute vs. Temperature and Season
 lm_WODU_season <- lm(data = WODU_MA_temp,
                 observations_per_min_avg ~ AvgMonthlyTemp_F + 
                 as.factor(Season))
-#summarize output
+#Summarize output
 summary(lm_WODU_season)
 
 ```
+> Analysis:
