@@ -20,6 +20,7 @@ library(ggplot2)
 library(viridis)
 library(cowplot)
 library(corrplot)
+library(agricolae)
 
 #Set theme
 mytheme <- theme_bw(base_size = 14) + 
@@ -29,10 +30,12 @@ theme_set(mytheme)
 ```
 
 ## Import and Summarize State Temperature Data
+> Temperature data was obtained from the National Centers for Environmental Information Global Historical Climate Network Daily dataset. The GHCN-Daily contains daily climate summaries, including minimum and maximum temperature, from land surface stations across the world. Data was downloaded via the National Atmospheric and Oceanic Administraton API using the rnoaa package and a NOAA API token. The source code used to extract and pre-process the data is located in the project repository file: './Code/TemperatureAPI.Rmd'
 
 ```{r temp.data.analysis}
 # Import state temperature data, downloaded from the National Atmospheric and
 # Oceanic Administration using the rnoaa package
+# The source code used to download and pre-process the temperature data is
 MA_temp <- read.csv('./Data/Raw/Massachusetts/MassTemperature20102021.csv') %>% unique()
 
 # Summarize monthly temperature data for the entire state
@@ -46,6 +49,7 @@ MA_temp <- MA_temp %>%
 ```
 
 ## Import Bird Observation Data
+> Bird observation data was downloaded from the Cornell Lab of Orinthology eBird Database (https://ebird.org/).
 
 ```{r import.bird.data, include=FALSE}
 ###Import bird observation data downloaded from eBird
@@ -74,7 +78,8 @@ MAbirds <- bind_rows(OSPR, RWBL, WODU)
 ###Clean and filter the merged bird observation data
 MAbirds <- MAbirds %>% 
   #Filter species for columns of interest
-  select(common_name:observation_count, state, county, latitude:observation_date, protocol_type, duration_minutes) %>% 
+  select(common_name:observation_count, state, county, 
+         latitude:observation_date, protocol_type, duration_minutes) %>% 
   #Create/adjust columns useful for summarizing data
   mutate(#Replace "presence" notations ('X') in observation_count with values of 1
          observation_count = as.numeric(replace(
@@ -106,14 +111,16 @@ ggplot(MAbirds, aes(x=log10(observations_per_min))) +
 
 
 #### Create summary dataset of bird data by month ####
-# Statistics per species: (1) sum of observation_count per month; (2) sum of presence per month; and (3) average observations per minute per month
+#Statistics per species: (1) sum of observation_count per month,
+#(2) sum of presence per month, and (3) average observations per minute per month
 MAbirds_month <- MAbirds %>% 
   group_by(common_name, Month_Year) %>% 
   summarize(state = first(state),
             observations_per_min_avg = mean(observations_per_min),
             presence_count = sum(Presence),
             observation_count = sum(observation_count)) %>%
-  select(common_name, state, observation_count,  observations_per_min_avg, presence_count, Month_Year)
+  select(common_name, state, observation_count, 
+         observations_per_min_avg, presence_count, Month_Year)
 
 ##Join the bird observation to the temperature data
 MAbirds_temp <- full_join(MAbirds_month, MA_temp, by='Month_Year')
@@ -138,7 +145,7 @@ write.csv(MAbirds_temp, row.names = FALSE, './Data/Processed/Massachusetts/MAbir
 
 ## Exploratory Plots
 
-```{r monthly.sum.plots}
+```{r density.plot}
 #Create a basic density plot for all species across the entire date range
 #This plot represents bird observations uncorrected for effort
 ggplot(MAbirds, aes(x = observation_date, fill = common_name, color = common_name)) +
@@ -152,8 +159,10 @@ ggplot(MAbirds, aes(x = observation_date, fill = common_name, color = common_nam
   #Create figure labels
   labs(x = "Observation Date", title="Bird Observation Density by Species",
        subtitle = "Massachusetts: 2010:2020")
+```
 
 
+```{r monthly.sum.plot}
 #Plot Average Observations per Minute for 2010-2021 by Species
 ggplot(MAbirds_temp, 
        aes(x=Month_Year, y=log10(observations_per_min_avg), color=AvgMonthlyTemp_F)) +
@@ -170,8 +179,11 @@ ggplot(MAbirds_temp,
        subtitle = 'Massachusetts: 2010-2020') +
   #Facet by species
   facet_wrap(~common_name, nrow=3)
+```
 
-#### Cowplot of average observations per minute by year and species ####
+
+```{r cow.plot}
+## Cowplot of average observations per minute by year and species
 
 #Osprey component plot (controls the y-axis label)
 OSPRplot <- ggplot(filter(MAbirds_temp, common_name == 'Osprey'), 
@@ -223,10 +235,10 @@ WODUplot <- ggplot(filter(MAbirds_temp, common_name == 'Wood Duck'),
         axis.text.y=element_text(size=9), strip.text=element_text(size=9)) +
   facet_grid(vars(year(Month_Year)))
 
+##Cowplot
 
 #Extract the legend from the RWBL component plot as an object
 birdleg <-get_legend(RWBLplot)
-
 #Create a title for the combined plot
 title <- ggdraw() + 
   draw_label('Seasonal Stay in Massachusetts by Species: 2010:2020',
@@ -234,12 +246,13 @@ title <- ggdraw() +
              x = 0,
              hjust = 0) +
   theme(plot.margin = margin(0, 0, 0, 5))
-
 #Combine the individual species plots into 3-species cowplot
-birdplot <- plot_grid(OSPRplot, RWBLplot + theme(legend.position='none'), WODUplot, align = c('hv'), nrow=1)
-                        
+birdplot <- plot_grid(OSPRplot, RWBLplot + theme(legend.position='none'),
+                      WODUplot, align = c('hv'), nrow=1)
 #Add the title and legend to birdplot 
-birdplot <- plot_grid(title, birdplot, birdleg, ncol = 1, rel_heights = c(.08, 1.2, .15))
+birdplot <- plot_grid(title, birdplot, birdleg, ncol = 1, 
+                      rel_heights = c(.08, 1.2, .15))
+#Print
 print(birdplot)
 ```
 
@@ -250,7 +263,7 @@ print(birdplot)
 
 > Is month (i.e., time) or average monthly temperature a better predictor of species-specific trends in average monthly observations per minute?
 
-> Hypothesis: This is likely species depended. I expect that temperature will have the largest affect on the  warmer temperatures will result in less birds, effect of temperature will depend on month.
+> Hypothesis: This is likely species depended. I expect that temperature will have the largest affect on the warmer temperatures will result in less birds, effect of temperature will depend on month.
 
 ```{r subset}
 #Subset data by species
@@ -295,61 +308,134 @@ corrplot(corMatrix_WODU, method = "color")
 
 
 ## Linear Regressions
-> Question 1: For each bird species, what is the relationship between the average monthly observations per minute and average monthly temperature?
+> Question: For each species, is month, season, or average monthly temperature a better predictor of effort-adjusted observations (average observations per minute)?
 
-> Question 2: Is month, season, (i.e., time), or average monthly temperature a better predictor of species-specific trends in average monthly observations per minute?
+> NOTE: For each species, Month and Season are evaluated separately (with Average Monthly Temperature) to avoid regressions colinearity. Season is a numeric variable that was created by grouping the Month variable into four groups, which will cause singularities when running a regression.
 
-> Hypothesis: This is likely species depended. I expect that temperature will have the largest affect on the  warmer temperatures will result in less birds, effect of temperature will depend on month.
+> Hypothesis: Time of Year (i.e., Month or Season) will have a stronger relationship to observations per minuite than average monthly temperature. In other words, there will be a stronger association with the time of year that birds tend to be observed than trends in temperature associated with those times of year. Between Month and Year, I expect that Month will be a better predictor of effort-adjusted observations for the osprey, who are not present in Massachusetts year round. I expect that the broader Season variable will better predictor of bird-observations for the red-winged blackbird and wood duck.
 
 ```{r linear.regressions}
-
 #### Osprey ####
-#Observations per minute vs. Temperature and Month
-lm_OSPR_month <- lm(data = OSPR_MA_temp,
-                observations_per_min_avg ~ AvgMonthlyTemp_F + 
-                as.factor(Month))
+#Observations per minute vs.Temperature and Month
+lm_OSPR.MA.month <- lm(data = OSPR_MA_temp,
+                observations_per_min_avg ~ AvgMonthlyTemp_F + as.factor(Month)-1)
 #Summarize output
-summary(lm_OSPR_month)
+summary(lm_OSPR.MA.month)
+#Select model based on AIC
+step(lm_OSPR.MA.month) #no recommended change to model
 
 
 #Observations per minute vs. Temperature and Season
-lm_OSPR_season <- lm(data = OSPR_MA_temp,
-                observations_per_min_avg ~ AvgMonthlyTemp_F + 
-                as.factor(Season))
+lm_OSPR.MA.season <- lm(data = OSPR_MA_temp,
+                observations_per_min_avg ~ AvgMonthlyTemp_F + as.factor(Season)-1)
 #Summarize output
-summary(lm_OSPR_season)
+summary(lm_OSPR.MA.season)
+#Select model based on AIC
+step(lm_OSPR.MA.season) #no recommended change to model
 
 #### Red winged Blackbird ####
-#Observations per minute vs. Temperature and Month
-lm_RWBL_month <- lm(data = RWBL_MA_temp,
-                observations_per_min_avg ~ AvgMonthlyTemp_F + 
-                as.factor(Month))
+
+#Observations per minute vs. Temperature and Month 
+lm_RWBL.MA.month <- lm(data = RWBL_MA_temp,
+                observations_per_min_avg ~ AvgMonthlyTemp_F + as.factor(Month)-1)
 #Summarize output
-summary(lm_RWBL_month)
+summary(lm_RWBL.MA.month)
+#Select model based on AIC
+step(lm_RWBL.MA.month) #stepwise function recommends dropping Temperature
+
+##Observations per minute vs. Month 
+lm_RWBL.MA.month.only <- lm(data = RWBL_MA_temp,
+                observations_per_min_avg ~ as.factor(Month)-1)
+#Summarize output
+summary(lm_RWBL.MA.month.only)
+step(lm_RWBL.MA.month.only)
 
 
-#Observations per minute vs. Temperature and Season
-lm_RWBL_season <- lm(data = RWBL_MA_temp,
-                observations_per_min_avg ~ AvgMonthlyTemp_F + 
-                as.factor(Season))
+#Observations per minute vs. Temperature and Season 
+lm_RWBL.MA.season <- lm(data = RWBL_MA_temp,
+                observations_per_min_avg ~ AvgMonthlyTemp_F + as.factor(Season)-1)
 #Summarize output
-summary(lm_RWBL_season)
+summary(lm_RWBL.MA.season)
+#Select model based on AIC
+step(lm_RWBL.MA.season) #no recommended change to model
 
 
 #### Wood Duck ####
-#Observations per minute vs. Temperature and Month
-lm_WODU_month <- lm(data = WODU_MA_temp,
-                observations_per_min_avg ~ AvgMonthlyTemp_F + 
-                as.factor(Month))
+
+#Observations per minute vs. Temperature and Month 
+lm_WODU.MA.month <- lm(data = WODU_MA_temp,
+                observations_per_min_avg ~ AvgMonthlyTemp_F + as.factor(Month)-1)
 #Summarize output
-summary(lm_WODU_month)
+summary(lm_WODU.MA.month)
+#Select model based on AIC
+step(lm_WODU.MA.month) #no recommended change to model
+
 
 #Observations per minute vs. Temperature and Season
-lm_WODU_season <- lm(data = WODU_MA_temp,
-                observations_per_min_avg ~ AvgMonthlyTemp_F + 
-                as.factor(Season))
+lm_WODU.MA.season <- lm(data = WODU_MA_temp,
+                observations_per_min_avg ~ AvgMonthlyTemp_F + as.factor(Season)-1)
 #Summarize output
-summary(lm_WODU_season)
+summary(lm_WODU.MA.season)
+#Select model based on AIC
+step(lm_WODU.MA.season) #no recommended change to model
 
 ```
-> Analysis:
+
+### Analysis 
+
+> **Osprey:** The osprey month-temperature model explained slightly more variance in effort-adjusted observations than the season-temperature model(**84.23%** and **84.05%**, respectively). Looking at the month and season coefficients, this is likely due to the lack/absence of osprey observational data during January and February (assumed to be from migration). The months surrounding this period (i.e., March, April, Novemember, December) are the most statistically significant in the month-temperature model (p-value <0.001). Given that three seasons are represented in those four months, it makes sense that modeling the data by Month was more accurate than modeling the data by season for this species. Average Monthly Temeprature was statistically significant in both models: month-temperature p-value: **0.027345** and season-temperature p-value: **0.000945**. This result was expected, as the correlation between season and temperature was greater than the correlation between month and temperature based on earlier correlation tests. That being said, the coefficient of Average Monthly Temperature was not more significant than any of the seasonal coefficients for the osprey, which supports the hypothehis that time of year is a better predictor of changes in bird observations than temperature.
+
+> **Red-winged Blackbird:** Similar to the osprey, the red-winged blackbird month-temperature model explained the most variance in effort-corrrected obsevations -- **74.28%**. However, unlike the osprey, the stepwise function for the red-winged blackbird month-temperature model recommended removing Average Monthly Temerature from the model (**Starting AIC: -302.77; Final AIC: -304.24**). Prior to removing temperature, the red-winged blackbird month-temperature model explained 74.16% of the variance in observation data, which was still a better fit than the season-temperature model (explaining 71.74% of variance). This result is consistent with the hypothesis that time of year is a better predictor of bird observation effor than temperature. While only ten months had statistically significant p-values (p>0.5 or better), month is still appears to be a better predictor or changes in effort-corrected observations for the red-winged blackbird than season. Seasonal trends in observations may be difficult to analyze for the red-winged blackbird in Massachusetts given the prevelance of the species and the fact that it turns out there are both resident and migratory populations. Looking at the month and season factors together, the change that occurs in species observations in the winter months is definitely worth exploring (p-value for Season 1 (Winter) is the most significant: 2.79e-15). However, I would recommend attempting to narrow down observations to a subpopulation of brids in Massassachusetts.
+
+> **Wood Duck:** The wood duck month-temperature model explained more variance in effort-adjusted observations than the season-temperature model by the largest margin of the three bird species -- **87.77%** to **83.98%**. Similar to the osprey, Average Monthly Temperature was statistically significant for both models, but had a larger impact on bird observations in the season-temperature model (season-temperature p-value: 0.00239; month-temperautre p-value: 0.026586). The stepwise functions for the wood duck models did not recommend dropping any variables or factors. Like the red-winged blackbird, wood ducks have both a migratory and resident population in Massachusetts. This resiedent population can make them difficult to evaluate their migration patterns using observation data because the species is observed year round. Viewing the month and season regression together, there appears to differences in wood duck observations in the Spring & Summer vs. Fall & Winter, which could be interested to explore in more detail.
+
+## Post-hoc Analysis
+> For each species, what months have similar effort-adjusted bird observations?
+> While not explored in great detail here, these groupings may indicate a more focused period of time to study migratory patterns in the future.
+
+```{r post.hoc.analysis}
+#### Osprey ####
+
+#Fit an observations per minute vs. month model as an anova
+aov_OSPR.MA.month <- 
+  aov(data = OSPR_MA_temp, observations_per_min_avg ~ as.factor(Month))
+#Summarize the aov
+summary(aov_OSPR.MA.month)
+
+#Reveal groupings with similar bird observations: Tukey HSD Test
+OSPR.MA.month.grps <- 
+  HSD.test(aov_OSPR.MA.month, "as.factor(Month)", group = TRUE)
+#Print the groupings
+OSPR.MA.month.grps
+
+
+#### Red-winged Blackbird ####
+
+#Fit an observations per minute vs. month model as an anova
+aov_RWBL.MA.month <- 
+  aov(data = RWBL_MA_temp, observations_per_min_avg ~ as.factor(Month))
+#Summarize the aov
+summary(aov_OSPR.MA.month)
+
+# Reveal groupings with similar bird observations: Tukey HSD Test
+RWBL.MA.month.grps <- 
+  HSD.test(aov_RWBL.MA.month, "as.factor(Month)", group = TRUE)
+#Print the groupings
+RWBL.MA.month.grps
+
+
+#### Wood Duck ####
+
+#Fit an observations per minute vs. month model as an anova
+aov_WODU.MA.month <- 
+  aov(data = WODU_MA_temp, observations_per_min_avg ~ as.factor(Month))
+#Summarize the aov
+summary(aov_WODU.MA.month)
+
+#Reveal groupings with similar bird observations: Tukey HSD Test
+WODU.MA.month.grps <- 
+  HSD.test(aov_WODU.MA.month, "as.factor(Month)", group = TRUE)
+#Print the groupings
+WODU.MA.month.grps
+```
+
