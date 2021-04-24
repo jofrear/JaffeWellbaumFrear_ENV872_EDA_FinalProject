@@ -10,121 +10,154 @@ editor options:
 ```{r setup, include=FALSE, echo=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 
+#Check working directory
+
 getwd()
-options("noaakey" = Sys.getenv("noaakey"))
+#Load personal NOAA API token
+#options("noaakey" = Sys.getenv("noaakey"))
 
 #install.packages("rnoaa")
 
+#Load necessary packages
 library(rnoaa)
 library(purrr)
 library(lubridate)
 library(tidyverse)
-
 ```
 
-## Create Variables for the Station IDs in Each State 
+## Extract Station IDs Where Target Data is Available
 
-
-```{r}
-df_stations <- ghcnd_stations()
-  
+```{r extract.station.ids}
+#Use rnoaa ghcnd_stations() function to extract data based on state station ID
 df_stations <- ghcnd_stations() %>% 
+  #Filter for station ids that collect temperature data
+  #This filtering does not return temperature data itself
   filter(element %in% c('TMIN','TMAX','TAVG')) %>% 
+  #Filter for station ids that with data for the target date range
   filter(first_year <= 2010) %>%
   filter(last_year == 2021) %>% 
+  #Filter for station ids in one of the target state
   filter(state %in% c('MA', 'ME', 'NC'))
+```
 
+## Create State Subsets
+
+```{r create.state.subsets}
+#Create a subset for unique station IDs in each state of interest
+
+#Massachusetts
 df_MAstations <- df_stations %>% 
   filter(state == 'MA')
 MAstations <- unique(df_MAstations$id)
 
+#Maine
 df_MEstations <- df_stations %>% 
   filter(state == 'ME')
 MEstations <- unique(df_MEstations$id)
 
+#North Carolina
 df_NCstations <- df_stations %>% 
   filter(state == 'NC')
 NCstations <- unique(df_NCstations$id)
 
 ```
 
-## Create a Scrape Function for State Temperature Data Based on Station ID
+## Create a Function to Extract Temperature Data for Each State by Station ID
 
-```{r echo=FALSE}
+```{r create.function, echo=FALSE}
 
-scrape.temp <- function(id) {
-  
-  df_temp <- meteo_tidy_ghcnd(stationid = id, 
-                   var = c('TMIN','TMAX'),
-                   date_min = "2010-01-01",
-                   date_max = "2021-04-15")
-
+extract.temp <- function(id) {
+  #Extract the messy temperature data
+  df_temp <- meteo_tidy_ghcnd(stationid = id,
+                   var = c('TMIN','TMAX'), #TAVG was not widely available 
+                   date_min = "2010-01-01", #Start date
+                   date_max = "2021-04-15") #End date (date of download)
+  #Wrangle it
   df_temp <- df_temp %>% 
-    mutate(Month = month(date),
+    mutate(Month = month(date), #Create Month and Year columns
            Year = year(date),
-           TMIN_F = (tmin * 0.18 + 32),
-           TMAX_F = (tmax * .18 + 32),
-           AvgDailyTemp = ((TMIN_F + TMAX_F) / 2)) %>% 
+           TMIN_F = (tmin * 0.18 + 32), #Convert temperature from 1/10 Celsius 
+           TMAX_F = (tmax * .18 + 32), #to Fahrenheit
+           AvgDailyTemp = ((TMIN_F + TMAX_F) / 2)) %>% #Mean daily temp by ID
     group_by(Month, Year, id) %>% 
-    summarize(AvgMonthlyTemp = mean(AvgDailyTemp)) %>% 
-    arrange(Year, Month)
+    summarize(AvgMonthlyTemp = mean(AvgDailyTemp)) %>% #Mean monthly temp by ID
+    arrange(Year, Month) # Sort
   
   return(df_temp)
   
 }
 ```
 
-```{r test.scrape.function, echo=FALSE, message=FALSE, warning=FALSE}
-df_testMA <- scrape.temp('USC00190120')
+```{r test.function, include=FALSE}
+#Test the function on a single station ID
+df_testMA <- extract.temp('USC00190120')
 ```
 
 ## MA Temperature Data
-```{r echo=FALSE, message=FALSE, warning=FALSE}
-df_tempMA <- map(MAstations, scrape.temp) %>% bind_rows() 
+```{r MA.temp.data, include=FALSE}
+#Download temperature data for MA using the custom API function
+df_tempMA <- map(MAstations, extract.temp) %>% bind_rows() 
 ```
 
-```{r}
+```{r MA.temp.data.clean}
+#Combine the MA temp data with fields from the station ID data for flexibility
 df_tempMA <- merge(x=df_tempMA, 
                    y=df_MAstations[, c('id','latitude','longitude','state','name')], 
                    by='id', all.x = TRUE)
 
+#Arrange fields and remove duplicates
+df_tempMA <- df_tempMA %>% 
+  select(id, name, state, latitude, longitude, AvgMonthlyTemp, Month, Year) %>% 
+  unique()
+
+#Save output
 write.csv(df_tempMA,
           row.names = FALSE,
           './Data/Raw/Massachusetts/MassTemperature20102021.csv')
 ```
 
 ## ME Temperature Data
-```{r echo=FALSE, message=FALSE, warning=FALSE}
+```{r ME.temp.data, include=FALSE}
+#Download temperature data for ME using the custom API function
 df_tempME <- map(MEstations, scrape.temp) %>% bind_rows() 
 
 ```
 
-```{r}
+```{r ME.temp.data.clean}
+#Combine the ME temp data with fields from the station ID data for flexibility
 df_tempME <- merge(x=df_tempME, 
                    y=df_MEstations[, c('id','latitude','longitude','state','name')], 
                    by='id', all.x = TRUE)
 
+#Arrange fields and remove duplicates
 df_tempME <- df_tempME %>% 
-  select(id, name, state, latitude, longitude, AvgMonthlyTemp, Month, Year)
+  select(id, name, state, latitude, longitude, AvgMonthlyTemp, Month, Year) %>% 
+  unique()
 
+#Save output
 write.csv(df_tempME,
           row.names = FALSE,
           './Data/Raw/Maine/MaineTemperature20102021.csv')
 ```
 
 ## NC Temperature Data
-```{r echo=FALSE, message=FALSE, warning=FALSE}
+```{r NC.temp.data, include=FALSE}
+#Download temperature data for NC using the custom API function
 df_tempNC <- map(NCstations, scrape.temp) %>% bind_rows() 
 ```
 
-```{r}
+```{r NC.temp.data.clean}
+#Combine the NC temp data with fields from the station ID data for flexibility
 df_tempNC <- merge(x=df_tempNC, 
                    y=df_NCstations[, c('id','latitude','longitude','state','name')], 
                    by='id', all.x = TRUE)
 
+#Arrange fields and remove duplicates
 df_tempNC <- df_tempNC %>% 
-  select(id, name, state, latitude, longitude, AvgMonthlyTemp, Month, Year)
+  select(id, name, state, latitude, longitude, AvgMonthlyTemp, Month, Year) %>% 
+  unique()
 
+#Save output
 write.csv(df_tempNC,
           row.names = FALSE,
           './Data/Raw/NorthCarolina/NCTemperature20102021.csv')
