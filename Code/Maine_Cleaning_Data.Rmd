@@ -4,17 +4,12 @@ author: "Joshua Frear"
 date: "4/15/2021"
 output: html_document
 ---
-###
-This file is for taking the downloaded ebird data and processing it into summary files. 
+This file is for taking the downloaded ebird and temperature data and cleaning it, and processing it into files for analyis, which are placed in the "Processed" folder. 
 
-NOTE:
-
-I will use 4-letter AOU Bird Codes to refer to species in R. For reference:
-
-Red-winged Blackbird = RWBL
-Osprey = OSPR
-Wood Duck = WODU
-
+NOTE: I will use 4-letter AOU Bird Codes to refer to species in R.
+RWBL = Red-winged Blackbird
+OSPR = Osprey
+WODU = Wood Duck
 (https://www.birdpop.org/pages/birdSpeciesCodes.php)
 
 ```{r Load.and.Tidy.Data}
@@ -23,10 +18,6 @@ library(auk)
 library(tidyr)
 library(dplyr)
 library(lubridate)
-library(ggplot2)
-library(RColorBrewer)
-library(viridis)
-library(cowplot)
 
 getwd()
 
@@ -35,263 +26,71 @@ WODU_ME_ebd <- read_ebd("../Data/Raw/Maine/ebd_US-ME_wooduc_relFeb-2021/ebd_US-M
 RWBL_ME_ebd <- read_ebd("../Data/Raw/Maine/ebd_US-ME_rewbla_relFeb-2021/ebd_US-ME_rewbla_relFeb-2021.txt")
 OSPR_ME_ebd <- read_ebd("../Data/Raw/Maine/ebd_US-ME_osprey_relFeb-2021/ebd_US-ME_osprey_relFeb-2021.txt")
 
-### Osprey ###
-
 #Remove columns that are not of interest
 #For the initial clean, I'm keeping variables related to effort
 OSPR_ME_ebd <- OSPR_ME_ebd %>% 
+  select(common_name:observation_count, state, county, latitude:observation_date,
+         protocol_type,duration_minutes:all_species_reported) 
+WODU_ME_ebd <- WODU_ME_ebd %>% 
+  select(common_name:observation_count, state, county, latitude:observation_date,
+         protocol_type,duration_minutes:all_species_reported) 
+RWBL_ME_ebd <- RWBL_ME_ebd %>% 
   select(common_name:observation_count, state, county, latitude:observation_date, protocol_type,duration_minutes:all_species_reported) 
 
 #Ebird allows "presence" notations in counts with the character "X"
 #For our project, we will consider that as an observation of 1 bird.
 OSPR_ME_ebd$observation_count[OSPR_ME_ebd$observation_count == "X"] <- 1
 OSPR_ME_ebd$observation_count <- as.integer(OSPR_ME_ebd$observation_count)
-
-#Create column for year to remove old observations
-OSPR_ME_ebd$Year <- year(OSPR_ME_ebd$observation_date)
-#unique(OSPR_ME_ebd$Year)
-#Observations from before 2010 are included, so filter them out
-OSPR_ME_ebd <- OSPR_ME_ebd %>% filter(Year >= 2010)
-
-#Turn observation date into a month-year by using floor_date()
-OSPR_ME_ebd$Month_Year <- floor_date(OSPR_ME_ebd$observation_date, unit = "month")
-
-#Create a summary dataframe with one row for the sum of birds seen in a given month-year
-#IE 25 Ospreys observed in February 2016
-OSPR_ME_month <- OSPR_ME_ebd %>% 
-  group_by(Month_Year) %>% 
-  dplyr::summarize(sum(observation_count)) %>% 
-  rename("Observations" = "sum(observation_count)") %>% 
-  mutate(Common_Name = "Osprey",
-         State = "Maine")
-
-
-
-### Wood Duck ###
-
-#Remove columns that are not of interest
-WODU_ME_ebd <- WODU_ME_ebd %>% 
-  select(common_name:observation_count, state, county, latitude:observation_date, protocol_type,duration_minutes:all_species_reported) 
-
-#Ebird allows "presence" notations in counts with the character "X"
-#For our project, we will consider that as an observation of 1 bird.
 WODU_ME_ebd$observation_count[WODU_ME_ebd$observation_count == "X"] <- 1
 WODU_ME_ebd$observation_count <- as.integer(WODU_ME_ebd$observation_count)
-
-#Create column for year to remove old observations
-WODU_ME_ebd$Year <- year(WODU_ME_ebd$observation_date)
-#unique(WODU_ME_ebd$Year)
-#Observations from before 2010 are included, so filter them out
-WODU_ME_ebd <- WODU_ME_ebd %>% filter(Year >= 2010)
-
-#Turn observation date into a month-year by using floor_date()
-WODU_ME_ebd$Month_Year <- floor_date(WODU_ME_ebd$observation_date, unit = "month")
-
-#Create a summary dataframe with one row for the sum of birds seen in a given month-year
-WODU_ME_month <- WODU_ME_ebd %>% 
-  group_by(Month_Year) %>% 
-  dplyr::summarize(sum(observation_count)) %>% 
-  rename("Observations" = "sum(observation_count)") %>% 
-  mutate(Common_Name = "Wood Duck",
-         State = "Maine")
-
-
-
-### Red-Winged Blackbird ###
-
-#Remove columns that are not of interest
-#For the initial clean, I'm keeping variables related to effort
-RWBL_ME_ebd <- RWBL_ME_ebd %>% 
-  select(common_name:observation_count, state, county, latitude:observation_date, protocol_type,duration_minutes:all_species_reported) 
-
-#Ebird allows "presence" notations in counts with the character "X"
-#For our project, we will consider that as an observation of 1 bird.
 RWBL_ME_ebd$observation_count[RWBL_ME_ebd$observation_count == "X"] <- 1
 RWBL_ME_ebd$observation_count <- as.integer(RWBL_ME_ebd$observation_count)
 
 #Create column for year to remove old observations
+OSPR_ME_ebd$Year <- year(OSPR_ME_ebd$observation_date)
+WODU_ME_ebd$Year <- year(WODU_ME_ebd$observation_date)
 RWBL_ME_ebd$Year <- year(RWBL_ME_ebd$observation_date)
-#unique(RWBL_ME_ebd$Year)
-#Observations from before 2010 are included, so filter them out
+
+#filter out observations from before 2010
+OSPR_ME_ebd <- OSPR_ME_ebd %>% filter(Year >= 2010)
+WODU_ME_ebd <- WODU_ME_ebd %>% filter(Year >= 2010)
 RWBL_ME_ebd <- RWBL_ME_ebd %>% filter(Year >= 2010)
 
-#Turn observation date into a month-year by using floor_date()
-RWBL_ME_ebd$Month_Year <- floor_date(RWBL_ME_ebd$observation_date, unit = "month")
-
-#Create a summary dataframe with one row for the sum of birds seen in a given month-year
-RWBL_ME_month <- RWBL_ME_ebd %>% 
-  group_by(Month_Year) %>% 
-  dplyr::summarize(sum(observation_count)) %>% 
-  rename("Observations" = "sum(observation_count)") %>% 
-  mutate(Common_Name = "Red-Winged Blackbird",
-         State = "Maine")
-
-```
-
-```{r Add.Temperature.Data}
-
-Maine_Temps <- read.csv("../Data/Raw/Maine/MaineTemperature20102021.csv")
-Maine_Temps <- Maine_Temps[!duplicated(Maine_Temps), ]
-
-Maine_Temps$Month_Year <- paste0(Maine_Temps$Month,"-",Maine_Temps$Year)
-Maine_Temps$Month_Year <- my(Maine_Temps$Month_Year)
-
-Maine_Temps_Statewide <- Maine_Temps %>% drop_na() %>% 
-  group_by(Month_Year) %>% 
-   dplyr::summarize(mean(AvgMonthlyTemp)) %>% 
-  rename("Mean_Temperature" = "mean(AvgMonthlyTemp)")
-
-RWBL_ME_month <- full_join(Maine_Temps_Statewide, RWBL_ME_month, by = "Month_Year")
-OSPR_ME_month <- full_join(Maine_Temps_Statewide, OSPR_ME_month, by = "Month_Year")
-WODU_ME_month <- full_join(Maine_Temps_Statewide, WODU_ME_month, by = "Month_Year")
-
-#some months have no observations, but now have rows due to temp data
-#this sets them to correct non-NA values
-OSPR_ME_month$Common_Name = "Osprey"
-OSPR_ME_month$State = "Maine"
-OSPR_ME_month$Observations[is.na(OSPR_ME_month$Observations)] <- 0
-
-RWBL_ME_month$Common_Name = "Red-Winged Blackbird"
-RWBL_ME_month$State = "Maine"
-RWBL_ME_month$Observations[is.na(RWBL_ME_month$Observations)] <- 0
-
-WODU_ME_month$Common_Name = "Wood Duck"
-WODU_ME_month$State = "Maine"
-WODU_ME_month$Observations[is.na(WODU_ME_month$Observations)] <- 0
-
-```
-
-```{r Plots}
-
-mytheme <- theme_classic( base_size = 14) + 
-  theme( axis.text = element_text( color = "#222222ff"),
-         legend.position = "top",
-         # remove legend title
-         legend.title = element_blank(),
-         # margins (top,right,bottom,left)
-         axis.title.x = element_text( color = "black",
-                                    margin = margin(20,0,0,0)),
-         axis.title.y = element_text( color = "black",
-                                    margin = margin(0,20,0,0)))
-theme_set(mytheme)
-
-#plot is difficult to scale well
-plot1 <- ggplot(OSPR_ME_month, aes(x = Month_Year)) + geom_bar(aes(y = Observations), stat = "identity", fill = "dodgerblue", color = "black", alpha = 0.7) + 
-  geom_line(aes(y = Mean_Temperature*30), color = "black") + geom_point(aes(y = Mean_Temperature*30), color = "black") + labs(x = "Year", title = "Maine Ebird data, 2010-2021") + scale_y_continuous(name = "Osprey Observations", sec.axis = sec_axis(trans=~./30, name="Monthly Mean Temp (F)"))
-print(plot1)
-
-plot1.a <- ggplot(OSPR_ME_month, aes(x = Month_Year)) + geom_bar(aes(y = Observations), stat = "identity", fill = "dodgerblue", color = "black", alpha = 0.7) + 
-  geom_line(aes(y = Mean_Temperature*30), color = "black") + geom_point(aes(y = Mean_Temperature*30), color = "black") + labs(x = "Year", title = "Maine Ebird data, 2010-2021") + scale_y_continuous(name = "Osprey Observations", sec.axis = sec_axis(trans=~./30, name="Monthly Mean Temp (F)")) + facet_wrap()
-print(plot1.a)
-
-
-#connected scatterplot
-
-plot6 <- ggplot(OSPR_ME_month, aes(x = Mean_Temperature, y = Observations)) + geom_point() #+ geom_segment(aes(xend=Observations, yend=Mean_Temperature))
-
-print(plot6)
-
-
-plot2 <- ggplot(WODU_ME_month, aes(x = Month_Year, y = Observations)) + geom_line() + 
-  geom_smooth(method = "loess", se = F)
-print(plot2)
-
-plot3 <- ggplot(RWBL_ME_month, aes(x = Month_Year, y = Observations)) + geom_line() + 
-  geom_smooth(method = "loess", se = F)
-print(plot3)
-#ggsave("RWBL_ME_month.png")
-
-plot4 <- ggplot(RWBL_ME_month, aes(x = Month_Year, y = Observations, color = Mean_Temperature)) + 
-  geom_point()
-  
-print(plot4)
-
-#write summary csv files to project folder
-write.csv(OSPR_ME_month, file = "../Data/Processed/Maine/OSPR_ME_month.csv")
-write.csv(WODU_ME_month, file = "../Data/Processed/Maine/WODU_ME_month.csv")
-write.csv(RWBL_ME_month, file = "../Data/Processed/Maine/RWBL_ME_month.csv")
-```
-
-```{r Find.First.Last.Obs.Dates}
-
-#use min and max
-
-OSPR_ME_dates <- OSPR_ME_ebd %>% 
-  group_by(year(Month_Year)) %>% 
-  summarize(FirstObs = min(observation_date), LastObs = max(observation_date))
-
-WODU_ME_dates <- WODU_ME_ebd %>% 
-  group_by(year(Month_Year)) %>% 
-  summarize(FirstObs = min(observation_date), LastObs = max(observation_date))
-
-RWBL_ME_dates <- RWBL_ME_ebd %>% 
-  group_by(year(Month_Year)) %>% 
-  summarize(FirstObs = min(observation_date), LastObs = max(observation_date))
-
-#write summary csv files to project folder
-write.csv(OSPR_ME_dates, file = "../Data/Processed/Maine/OSPR_ME_firstlast.csv")
-write.csv(WODU_ME_dates, file = "../Data/Processed/Maine/WODU_ME_firstlast.csv")
-write.csv(RWBL_ME_dates, file = "../Data/Processed/Maine/RWBL_ME_firstlast.csv")
-
-```
-
-```{r Merge.Species}
-#Merged species dataset with actual dates of observation
-Allbirds_ME <- bind_rows(OSPR_ME_ebd, WODU_ME_ebd, RWBL_ME_ebd)
-
-Allbirds_ME <- Allbirds_ME %>% 
-  mutate(observations_per_min = observation_count/duration_minutes,
-         Week = week(observation_date), 
-         Presence = 1,
-         Week_Year = floor_date(observation_date, unit = "week"))
-
-
-write.csv(Allbirds_ME, file = "../Data/Processed/Allbirds_ME.csv")
-
-#Create a summary dataframe with one row for the sum of birds seen in a given week-year
-Allbirds_ME_week <- Allbirds_ME %>% 
-  group_by(common_name, Week_Year) %>% 
-  dplyr::summarize(sum(Presence)) %>% 
-  rename("Observations" = "sum(Presence)")
-
-plot5 <- ggplot(Allbirds_ME_week, aes(x = Week_Year, y = Observations, color = common_name)) + geom_line() + labs(x = "Year", title = "Maine Ebird data, 2010-2021")
-print(plot5)
-
-
-summary(Allbirds_ME$Presence)
-
-
-
-summary(allBirds$observations_per_min)
-
+#Add variables for Observations/Minute, Week of Year, Week/Year date, and Month/Year date
 OSPR_ME_ebd <- OSPR_ME_ebd %>% 
   mutate(observations_per_min = observation_count/duration_minutes,
          Week = week(observation_date), 
          Presence = 1,
-         Week_Year = floor_date(observation_date, unit = "week"))
+         Week_Year = floor_date(observation_date, unit = "week"),
+         Month_Year = floor_date(observation_date, unit = "month"))
 WODU_ME_ebd <- WODU_ME_ebd %>% 
   mutate(observations_per_min = observation_count/duration_minutes,
          Week = week(observation_date), 
          Presence = 1,
-         Week_Year = floor_date(observation_date, unit = "week"))
+         Week_Year = floor_date(observation_date, unit = "week"),
+         Month_Year = floor_date(observation_date, unit = "month"))
 RWBL_ME_ebd <- RWBL_ME_ebd %>% 
   mutate(observations_per_min = observation_count/duration_minutes,
          Week = week(observation_date), 
          Presence = 1,
-         Week_Year = floor_date(observation_date, unit = "week"))
+         Week_Year = floor_date(observation_date, unit = "week"),
+         Month_Year = floor_date(observation_date, unit = "month"))
 
+#NA and Inf values in observations_per_min indicate lack of data in observation time, so we will exclude
 OSPR_ME_ebd <- OSPR_ME_ebd %>%  
   filter( is.na(observations_per_min) == FALSE) %>% 
   filter( observations_per_min != Inf)
-
 WODU_ME_ebd <- WODU_ME_ebd %>%  
   filter( is.na(observations_per_min) == FALSE) %>% 
   filter( observations_per_min != Inf)
-
 RWBL_ME_ebd <- RWBL_ME_ebd %>% 
   filter( is.na(observations_per_min) == FALSE) %>% 
   filter( observations_per_min != Inf)
 
+#Create a summary dataframe with one row for the mean obs/min of birds seen in a given month-year
+#IE a mean of 0.4 Ospreys observed per minute watching in July 2016
+#future improvement: first filter NA observe times, then sum obs time and bird counts, and recalc
+#the obs/min, proper weights with someone watching for 2 hrs vs 10 mins
 OSPR_grouped <- OSPR_ME_ebd %>% 
   group_by(Month_Year) %>% 
   summarize(state = first(state),
@@ -313,7 +112,26 @@ RWBL_grouped <- RWBL_ME_ebd %>%
             presence_count = sum(Presence),
             observation_per_min_avg = mean(observations_per_min)
             ) 
+#Combine three species into one dataset
+Allbirds_ME <- bind_rows(OSPR_ME_ebd, WODU_ME_ebd, RWBL_ME_ebd)
 
+write.csv(Allbirds_ME, file = "../Data/Processed/Maine/Allbirds_ME.csv")
+```
+Next, we load Temperature data for Maine from a file obtained from NOAA
+```{r Temperature.Data}
+#Load temp data from NOAA
+Maine_Temps <- read.csv("../Data/Raw/Maine/MaineTemperature20102021.csv")
+Maine_Temps <- Maine_Temps[!duplicated(Maine_Temps), ]
+Maine_Temps$Month_Year <- paste0(Maine_Temps$Month,"-",Maine_Temps$Year)
+Maine_Temps$Month_Year <- my(Maine_Temps$Month_Year)
+
+#Summarize by statewide temps
+Maine_Temps_Statewide <- Maine_Temps %>% drop_na() %>% 
+  group_by(Month_Year) %>% 
+   dplyr::summarize(mean(AvgMonthlyTemp)) %>% 
+  rename("Mean_Temperature" = "mean(AvgMonthlyTemp)")
+
+#Join Temp data to grouped bird dataframes
 RWBL_ME_month <- full_join(Maine_Temps_Statewide, RWBL_grouped, by = "Month_Year")
 OSPR_ME_month <- full_join(Maine_Temps_Statewide, OSPR_grouped, by = "Month_Year")
 WODU_ME_month <- full_join(Maine_Temps_Statewide, WODU_grouped, by = "Month_Year")
@@ -323,6 +141,7 @@ WODU_ME_month <- full_join(Maine_Temps_Statewide, WODU_grouped, by = "Month_Year
 OSPR_ME_month$common_name = "Osprey"
 OSPR_ME_month$state = "Maine"
 OSPR_ME_month[is.na(OSPR_ME_month)] <- 0
+#Obs_per_min are log-transformed to normalize the data
 OSPR_ME_month$obs_per_min_log10 <- log10(OSPR_ME_month$observation_per_min_avg)
 
 RWBL_ME_month$common_name = "Red-Winged Blackbird"
@@ -335,110 +154,30 @@ WODU_ME_month$state = "Maine"
 WODU_ME_month[is.na(WODU_ME_month)] <- 0
 WODU_ME_month$obs_per_min_log10 <- log10(WODU_ME_month$observation_per_min_avg)
 
-
 allBirds_month_temps <- bind_rows(OSPR_ME_month, RWBL_ME_month, WODU_ME_month)
 
-
-
-#facet plot of obs/min by species
-plot7 <- ggplot(allBirds_month_temps, aes(x = Month_Year, y = obs_per_min_log10)) +
-  geom_line(aes(color = Mean_Temperature)) + scale_color_viridis(option = "C") + labs(title = "Maine Bird Observations (2010-2021)", subtitle = "by Average Monthly Temperature", y = "Average Observations per Minute (log10)", x = "Year", color = "Mean Monthly Temp (F)") + 
-  facet_wrap(~common_name, nrow = 3, scales = "free_y") + theme_grey()
-print(plot7)
-ggsave("Obs_Temp_plot.jpg", width = 10.5, units = c("in"))
-
-#ggridges attempt
-ggplot(allBirds_month_temps, aes(x = Month_Year, y = observation_per_min_avg, fill = common_name, color = common_name)) + 
-  geom_density_ridges(aes(y = "observation_per_min_avg"), alpha = .8) 
-
-
-#plot is difficult to scale well
-#Osprey with temps, 2 x axes
-plot1 <- ggplot(OSPR_ME_month, aes(x = Month_Year)) + scale_color_viridis(option = "C") + geom_bar(aes(y = observation_count_sum), fill = "lightgray", stat = "identity", color = "black", alpha = 1) + geom_line(aes(y = Mean_Temperature*30, color = Mean_Temperature)) + geom_point(aes(y = Mean_Temperature*30, color = Mean_Temperature)) + 
-  labs(x = "Year", title = "Maine Osprey data, 2010-2021", subtitle = "with Average Temperatures", color = "Mean Monthly Temp (F)") + scale_y_continuous(name = "Osprey Observations", sec.axis = sec_axis(trans=~./30, name="Monthly Mean Temp (F)")) + theme(legend.position = "right")
-print(plot1)
-ggsave("Osprey_obs_plot.jpg", width = 10, height = 7, units = c("in"))
-
-
-## Version 2, without colors
-plot1 <- ggplot(OSPR_ME_month, aes(x = Month_Year)) + geom_bar(aes(y = observation_count_sum), fill = "dodgerblue", stat = "identity", color = "black", alpha = 0.8) + geom_line(aes(y = Mean_Temperature*30)) + geom_point(aes(y = Mean_Temperature*30)) + 
-  labs(x = "Year", title = "Maine Osprey data, 2010-2021", subtitle = "with Average Temperatures", color = "Mean Monthly Temp (F)") + scale_y_continuous(name = "Osprey Observations", sec.axis = sec_axis(trans=~./30, name="Monthly Mean Temp (F)")) + theme(legend.position = "right")
-print(plot1)
-ggsave("Osprey_obs_plot.jpg", width = 10, height = 7, units = c("in"))
-
-# Version 2 for Blackbirds
-plot1 <- ggplot(OSPR_ME_month, aes(x = Month_Year)) + geom_bar(aes(y = observation_count_sum), fill = "dodgerblue", stat = "identity", color = "black", alpha = 0.8) + geom_line(aes(y = Mean_Temperature*30)) + geom_point(aes(y = Mean_Temperature*30)) + 
-  labs(x = "Year", title = "Maine Osprey data, 2010-2021", subtitle = "with Average Temperatures", color = "Mean Monthly Temp (F)") + scale_y_continuous(name = "Osprey Observations", sec.axis = sec_axis(trans=~./30, name="Monthly Mean Temp (F)")) + theme(legend.position = "right")
-print(plot1)
-ggsave("Osprey_obs_plot.jpg", width = 10, height = 7, units = c("in"))
+#write csv files to project folder
+write.csv(OSPR_ME_month, file = "../Data/Processed/Maine/OSPR_ME_month.csv")
+write.csv(WODU_ME_month, file = "../Data/Processed/Maine/WODU_ME_month.csv")
+write.csv(RWBL_ME_month, file = "../Data/Processed/Maine/RWBL_ME_month.csv")
 ```
 
-```{r Cowplot}
-# Version 2 but faceted for all 3
-plot.crazy <- ggplot(allBirds_month_temps, aes(x = Month_Year)) + geom_bar(aes(y = observation_count_sum), fill = "dodgerblue", stat = "identity", color = "black", alpha = 0.8) + 
-  labs(x = "Year", title = "Maine data, 2010-2021", subtitle = "with Average Temperatures", color = "Mean Monthly Temp (F)") + scale_y_continuous(name = "Osprey Observations") + theme(legend.position = "right") + 
-  facet_wrap(~common_name, nrow = 3, scales = "free_y")
-print(plot.crazy)
-ggsave("Osprey_obs_plot.jpg", width = 10, height = 7, units = c("in"))
+```{r Find.First.Last.Obs.Dates}
+#Find first-of-year and last-of-year observations for each species, each year
+OSPR_ME_dates <- OSPR_ME_ebd %>% 
+  group_by(year(Month_Year)) %>% 
+  summarize(FirstObs = min(observation_date), LastObs = max(observation_date))
 
-plot.ospr <- ggplot(OSPR_ME_month, aes(x = Month_Year, y = observation_count_sum)) + geom_bar(aes(y = observation_count_sum), fill = "dodgerblue", stat = "identity", color = "black", alpha = 0.8) + labs(y = "Osprey") + theme(axis.title.x=element_blank())
-print(plot.ospr)
+WODU_ME_dates <- WODU_ME_ebd %>% 
+  group_by(year(Month_Year)) %>% 
+  summarize(FirstObs = min(observation_date), LastObs = max(observation_date))
 
-plot.rwbl <- ggplot(RWBL_ME_month, aes(x = Month_Year, y = observation_count_sum)) + geom_bar(aes(y = observation_count_sum), fill = "red", stat = "identity", color = "black", alpha = 0.8) + labs(y = "RWBL") + theme(axis.title.x=element_blank())
+RWBL_ME_dates <- RWBL_ME_ebd %>% 
+  group_by(year(Month_Year)) %>% 
+  summarize(FirstObs = min(observation_date), LastObs = max(observation_date))
 
-plot.wodu <- ggplot(WODU_ME_month, aes(x = Month_Year, y = observation_count_sum)) + geom_bar(aes(y = observation_count_sum), fill = "forestgreen", stat = "identity", color = "black", alpha = 0.8) + labs(y = "WODU") + theme(axis.title.x=element_blank())
-
-plot.temps <- ggplot(allBirds_month_temps, aes(x = Month_Year, y = Mean_Temperature)) + geom_line(aes()) + geom_point() + theme(axis.title.x=element_blank()) + labs(y = "Temp")
-print(plot.temps)
-
-plot_grid(plot.ospr, plot.rwbl, plot.wodu, plot.temps, ncol = 1, align = 'v')
-ggsave("bird_obs_me.jpg", width = 10, height = 10, units = c("in"))
-
-```
-
-
-```{r Time.Series}
-
-#Osprey
-OSPR.ts <- ts(OSPR_ME_month$observation_per_min_avg, 
-                             start = c(2010,1), frequency = 12)
-
-OSPR.ts.decomposed <- stl(OSPR.ts, s.window = "periodic")
-# Visualize the decomposed series. 
-plot(OSPR.ts.decomposed)
-
-monthly_OSPR_trend <- Kendall::SeasonalMannKendall(OSPR.ts)
-summary(monthly_OSPR_trend)
-
-OSPR.ts.components <- as.data.frame(OSPR.ts.decomposed$time.series[,1:3])
-
-
-#Red-winged Blackbird
-
-RWBL.ts <- ts(RWBL_ME_month$observation_per_min_avg, 
-                             start = c(2010,1), frequency = 12)
-
-RWBL.ts.decomposed <- stl(RWBL.ts, s.window = "periodic")
-# Visualize the decomposed series. 
-plot(RWBL.ts.decomposed)
-
-monthly_RWBL_trend <- Kendall::SeasonalMannKendall(RWBL.ts)
-summary(monthly_RWBL_trend)
-
-RWBL.ts.components <- as.data.frame(RWBL.ts.decomposed$time.series[,1:3])
-
-## Wood Duck
-
-WODU.ts <- ts(WODU_ME_month$observation_per_min_avg, 
-                             start = c(2010,1), frequency = 12)
-
-WODU.ts.decomposed <- stl(WODU.ts, s.window = "periodic")
-# Visualize the decomposed series. 
-plot(WODU.ts.decomposed)
-
-monthly_WODU_trend <- Kendall::SeasonalMannKendall(WODU.ts)
-summary(monthly_WODU_trend)
-
-WODU.ts.components <- as.data.frame(WODU.ts.decomposed$time.series[,1:3])
-
+#write csv files to project folder
+write.csv(OSPR_ME_dates, file = "../Data/Processed/Maine/OSPR_ME_firstlast.csv")
+write.csv(WODU_ME_dates, file = "../Data/Processed/Maine/WODU_ME_firstlast.csv")
+write.csv(RWBL_ME_dates, file = "../Data/Processed/Maine/RWBL_ME_firstlast.csv")
 ```
