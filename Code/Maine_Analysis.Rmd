@@ -1,11 +1,11 @@
 ---
 title: "Maine_Analysis"
 author: "Joshua Frear"
-date: "4/17/2021"
+date: "4/26/2021"
 output: html_document
 ---
 
-```{r Time.Series}
+```{r setup}
 # Library
 library(tidyverse)
 library(ggplot2)
@@ -16,6 +16,24 @@ library(colormap)
 library(ggridges)
 library(RColorBrewer)
 library(corrplot)
+
+OSPR_ME_month <- read.csv("../Data/Processed/Maine/OSPR_ME_month.csv")
+WODU_ME_month <- read.csv("../Data/Processed/Maine/WODU_ME_month.csv")
+RWBL_ME_month <- read.csv("../Data/Processed/Maine/RWBL_ME_month.csv")
+
+OSPR_ME_month$Month_Year <- as.Date(OSPR_ME_month$Month_Year)
+WODU_ME_month$Month_Year <- as.Date(WODU_ME_month$Month_Year)
+RWBL_ME_month$Month_Year <- as.Date(RWBL_ME_month$Month_Year)
+
+ME_birds_temps <- read.csv("../Data/Processed/Maine/ME_birds_temps.csv")
+ME_birds_temps$Month_Year <- as.Date(ME_birds_temps$Month_Year)
+Allbirds_ME <- read.csv("../Data/Processed/Maine/Allbirds_ME.csv")
+
+
+OSPR_ME_firstlast <- read.csv("../Data/Processed/Maine/OSPR_ME_firstlast.csv")
+WODU_ME_firstlast <- read.csv("../Data/Processed/Maine/WODU_ME_firstlast.csv")
+RWBL_ME_firstlast <- read.csv("../Data/Processed/Maine/RWBL_ME_firstlast.csv")
+
 
 # ggplot theme
 mytheme <- theme_classic( base_size = 14) + 
@@ -29,129 +47,157 @@ mytheme <- theme_classic( base_size = 14) +
          axis.title.y = element_text( color = "black",
                                     margin = margin(0,20,0,0)))
 theme_set(mytheme)
-
-
-getwd()
-OSPR_ME_month <- read.csv("../Data/Processed/Maine/OSPR_ME_month.csv")
-WODU_ME_month <- read.csv("../Data/Processed/Maine/WODU_ME_month.csv")
-RWBL_ME_month <- read.csv("../Data/Processed/Maine/RWBL_ME_month.csv")
-
-OSPR_ME_month$Month_Year <- as.Date(OSPR_ME_month$Month_Year)
-WODU_ME_month$Month_Year <- as.Date(WODU_ME_month$Month_Year)
-RWBL_ME_month$Month_Year <- as.Date(RWBL_ME_month$Month_Year)
-
-WODU_ME_month$Common_Name = "Wood Duck"
-WODU_ME_month$State = "Maine"
-RWBL_ME_month$Common_Name = "Red-Winged Blackbird"
-RWBL_ME_month$State = "Maine"
-
-Allbirds_ME <- read.csv("../Data/Processed/Allbirds_ME.csv")
-str(Allbirds_ME)
-Allbirds_ME$observation_date <- as.Date(Allbirds_ME$observation_date)
-Allbirds_ME$Month_Year <- as.Date(Allbirds_ME$Month_Year)
-Allbirds_ME$Week_Year <- as.Date(Allbirds_ME$Week_Year)
-
-
-#Allbirds_ME[is.na(Allbirds_ME)] <- 0
-
-OSPR_ME_firstlast <- read.csv("../Data/Processed/Maine/OSPR_ME_firstlast.csv")
-WODU_ME_firstlast <- read.csv("../Data/Processed/Maine/WODU_ME_firstlast.csv")
-RWBL_ME_firstlast <- read.csv("../Data/Processed/Maine/RWBL_ME_firstlast.csv")
-
-view(OSPR_ME_month)
-#simple linear model, R2 = 0.48
-model1 <- lm(data = OSPR_ME_month, observation_count_sum ~ Mean_Temperature)
-summary(model1)
-
-model2 <- lm(data = WODU_ME_month, observation_count_sum ~ Mean_Temperature)
-summary(model2)
-
-model3 <- lm(data = RWBL_ME_month, observation_count_sum ~ Mean_Temperature)
-summary(model3)
-  
 ```
 
-Earliest Date every year for each bird each year
-Last Observation ""
 
-Time Series
- - then pare out trends
+```{r}
+summary(Allbirds_ME$observations_per_min)
+
+ggplot(Allbirds_ME, aes(x=observations_per_min)) + 
+  geom_density() 
+ggplot(Allbirds_ME, aes(x=log10(observations_per_min))) + 
+  geom_density() 
+
+```
+
+```{r}
+ggplot(ME_birds_temps, 
+       aes(x=Month_Year, y=log10(observation_per_min_avg), color=Mean_Temperature)) +
+  geom_line(lwd=0.8) +
+  #Set color to average monthly temperature
+  scale_color_viridis(option='plasma') +
+  #Create legible date break labels
+  scale_x_date(date_breaks = '1 year', date_labels = '%Y') +
+  #Create figure labels
+  labs(x='Observation Date', 
+       y='Average Observations/Minute (log10)', 
+       color='Mean Monthly Temperature (F)', 
+       title= 'Effort-Corrected Bird Observations by Species', 
+       subtitle = 'Maine: 2010-2020') +
+  #Facet by species
+  facet_wrap(~common_name, nrow=3)
+
+```
+
+
+```{r}
+#facet plot of obs/min by species
+plot.obs.min <- ggplot(ME_birds_temps, aes(x = Month_Year, y = obs_per_min_log10)) +
+  geom_line(aes(color = Mean_Temperature)) + scale_color_viridis(option = "C") + labs(title = "Maine Bird Observations (2010-2021)", subtitle = "by Average Monthly Temperature", y = "Average Observations per Minute (log10)", x = "Year", color = "Mean Monthly Temp (F)") + 
+  facet_wrap(~common_name, nrow = 3, scales = "free_y") + theme_grey()
+print(plot.obs.min)
+
+#ggridges
+#This plot represents bird observations uncorrected for effort
+ggplot(Allbirds_ME, aes(x = observation_date, fill = common_name, color = common_name)) +
+  geom_density(alpha = .2) + 
+  facet_wrap(~common_name, ncol = 3) + 
+  theme(legend.position = 'none',
+         axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  #Set color and fill
+  scale_color_brewer( palette = 'Dark2') + 
+  scale_fill_brewer( palette = 'Dark2') + 
+  #Create figure labels
+  labs(x = "Observation Date", title="Bird Observation Density by Species",
+       subtitle = "Maine: 2010:2020")
+
+#another way of visualizing it
+plot.crazy <- ggplot(ME_birds_temps, aes(x = Month_Year)) + geom_bar(aes(y = observation_count_sum), fill = "dodgerblue", stat = "identity", color = "black", alpha = 0.8) + 
+  labs(x = "Year", title = "Maine data, 2010-2021", subtitle = "with Average Temperatures", color = "Mean Monthly Temp (F)") + scale_y_continuous(name = "Osprey Observations") + theme(legend.position = "right") + 
+  facet_wrap(~common_name, nrow = 3, scales = "free_y")
+print(plot.crazy)
+
+# plot_grid all species together
+plot.ospr <- ggplot(OSPR_ME_month, aes(x = Month_Year, y = observation_count_sum)) + geom_bar(aes(y = observation_count_sum), fill = "dodgerblue", stat = "identity", color = "black", alpha = 0.8) + labs(y = "Osprey") + theme(axis.title.x=element_blank())
+print(plot.ospr)
+
+plot.rwbl <- ggplot(RWBL_ME_month, aes(x = Month_Year, y = observation_count_sum)) + geom_bar(aes(y = observation_count_sum), fill = "red", stat = "identity", color = "black", alpha = 0.8) + labs(y = "RWBL") + theme(axis.title.x=element_blank())
+
+plot.wodu <- ggplot(WODU_ME_month, aes(x = Month_Year, y = observation_count_sum)) + geom_bar(aes(y = observation_count_sum), fill = "forestgreen", stat = "identity", color = "black", alpha = 0.8) + labs(y = "WODU") + theme(axis.title.x=element_blank())
+
+plot.temps <- ggplot(ME_birds_temps, aes(x = Month_Year, y = Mean_Temperature)) + geom_line(aes()) + geom_point() + theme(axis.title.x=element_blank()) + labs(y = "Temp")
+print(plot.temps)
+
+plot_grid(plot.ospr, plot.rwbl, plot.wodu, plot.temps, ncol = 1, align = 'v')
+```
+
+```{r}
+WODU_ME_firstlast$FirstObs <- as.Date(WODU_ME_firstlast$FirstObs)
+WODU_ME_firstlast$LastObs <- as.Date(WODU_ME_firstlast$LastObs)
+
+gap1 <- WODU_ME_firstlast$FirstObs[2] - WODU_ME_firstlast$LastObs[1]
+gap2 <- WODU_ME_firstlast$FirstObs[3] - WODU_ME_firstlast$LastObs[2]
+gap3 <- WODU_ME_firstlast$FirstObs[4] - WODU_ME_firstlast$LastObs[3]
+gap4 <- WODU_ME_firstlast$FirstObs[5] - WODU_ME_firstlast$LastObs[4]
+gap5 <- WODU_ME_firstlast$FirstObs[6] - WODU_ME_firstlast$LastObs[5]
+gap6 <- WODU_ME_firstlast$FirstObs[7] - WODU_ME_firstlast$LastObs[6]
+gap7 <- WODU_ME_firstlast$FirstObs[8] - WODU_ME_firstlast$LastObs[7]
+gap8 <- WODU_ME_firstlast$FirstObs[9] - WODU_ME_firstlast$LastObs[8]
+gap9 <- WODU_ME_firstlast$FirstObs[10] - WODU_ME_firstlast$LastObs[9]
+gap10 <- WODU_ME_firstlast$FirstObs[11] - WODU_ME_firstlast$LastObs[10]
+gap11 <- WODU_ME_firstlast$FirstObs[12] - WODU_ME_firstlast$LastObs[11]
+
+WODU_ME_firstlast$GapFromLastYear <- c(NA, gap1, gap2, gap3, gap4, gap5, gap6, gap7, gap8,
+                                       gap9, gap10, gap11)
+
+```
+
+Time Series:
+The second approach is to construct a time series analysis for the observations. According to the time series analysis, each of the species showed both a strong seasonal component in observations, and a rising monotonic trend across the study period in Maine, according to the seasonal Mann-Kendall test (Osprey: tau = 0.389, p < 0.001, Wood Duck: tau = 0.269, p < 0.001, Red-Winged Blackbird: tau = 0.335, p < 0.001). This rising trend may be due to increasing abundance of these species, but it may also be due to several confounding factors, including variability in observations by birders (e.g. location, time of day, or increasing expertise).
+
+Each of the species had an influx of observations associated with spring migration (Febuary-April). Wood Ducks and Red-Winged Blackbird seasonal trends revealed two spikes, suggesting that most spring and fall observations are not from summer residents, but from migrating individuals from out-of-state. Osprey observations, on the other hand, had a relatively constant seasonal component for summer and fall. 
  
 ```{r Time.Series}
-#Osprey
+#Osprey Time Series
 OSPR.ts <- ts(OSPR_ME_month$observation_per_min_avg, 
                              start = c(2010,1), frequency = 12)
 
 OSPR.ts.decomposed <- stl(OSPR.ts, s.window = "periodic")
 # Visualize the decomposed series. 
-plot(OSPR.ts.decomposed)
+plot(OSPR.ts.decomposed, main = "Maine Osprey Time Series")
 
-monthly_OSPR_trend <- Kendall::SeasonalMannKendall(OSPR.ts)
-summary(monthly_OSPR_trend)
+#Red-winged Blackbird Time Series
+#remove outlier, interpolate
+RWBL_ME_month$observation_per_min_avg[RWBL_ME_month$observation_per_min_avg > 3] <- NA
 
-OSPR.ts.components <- as.data.frame(OSPR.ts.decomposed$time.series[,1:3])
-
-
-#Red-winged Blackbird
+RWBL_ME_month <- 
+  RWBL_ME_month %>% 
+  mutate(observation_per_min_avg = zoo::na.approx(observation_per_min_avg))
 
 RWBL.ts <- ts(RWBL_ME_month$observation_per_min_avg, 
                              start = c(2010,1), frequency = 12)
 
 RWBL.ts.decomposed <- stl(RWBL.ts, s.window = "periodic")
 # Visualize the decomposed series. 
-plot(RWBL.ts.decomposed)
-
-monthly_RWBL_trend <- Kendall::SeasonalMannKendall(RWBL.ts)
-summary(monthly_RWBL_trend)
-
-RWBL.ts.components <- as.data.frame(RWBL.ts.decomposed$time.series[,1:3])
+plot(RWBL.ts.decomposed, main = "Maine Red-Winged Blackbird Time Series")
 
 ## Wood Duck
-
 WODU.ts <- ts(WODU_ME_month$observation_per_min_avg, 
                              start = c(2010,1), frequency = 12)
-
 WODU.ts.decomposed <- stl(WODU.ts, s.window = "periodic")
 # Visualize the decomposed series. 
-plot(WODU.ts.decomposed)
+plot(WODU.ts.decomposed, main = "Maine Wood Duck Time Series")
+
+## Create a table of the time-series data
+monthly_OSPR_trend <- Kendall::SeasonalMannKendall(OSPR.ts)
+#summary(monthly_OSPR_trend)
+OSPR.ts.components <- as.data.frame(OSPR.ts.decomposed$time.series[,1:3])
 
 monthly_WODU_trend <- Kendall::SeasonalMannKendall(WODU.ts)
-summary(monthly_WODU_trend)
-
+#summary(monthly_WODU_trend)
 WODU.ts.components <- as.data.frame(WODU.ts.decomposed$time.series[,1:3])
 
-LM
+monthly_RWBL_trend <- Kendall::SeasonalMannKendall(RWBL.ts)
+#summary(monthly_RWBL_trend)
+RWBL.ts.components <- as.data.frame(RWBL.ts.decomposed$time.series[,1:3])
 
+OSPR.ts.components$Species <- "Osprey"
+OSPR.ts.components$Date <- OSPR_ME_month$Month_Year
+WODU.ts.components$Species <- "Wood Duck"
+WODU.ts.components$Date <- WODU.ts.components$Month_Year
+RWBL.ts.components$Species <- "Red-Winged Blackbird"
+RWBL.ts.components$Date <- RWBL.ts.components$Month_Year
+
+OSPR_seasonal <- unique(OSPR.ts.components$seasonal)
+WODU_seasonal <- unique(WODU.ts.components$seasonal)
 ``` 
-
-```{r}
-## Visualize Data
-
-ggplot(Allbirds, aes(x = observation_date, y = Week, color = common_name, fill = common_name)) + 
-  geom_line(aes(y = observation_count))
-
-
-
-
-
-###########cates########
-### Birds, ungrouped
-# basic density plot across all years, faceted 
-ggplot(allBirds, aes(x = observation_date, fill = common_name, color = common_name)) +
-  geom_density(alpha = .2) + 
-  facet_wrap(vars(common_name), nrow = 1, ncol = 3) + 
-  theme( legend.position = "none",
-         axis.text.x = element_text(angle = 45,
-                                    hjust = 1))
-#  scale_x_date(limits = c(as.Date("2015-01-01"), as.Date("2015-12-31")))
-
-# basic density plot of observations across all years, unfaceted 
-ggplot(allBirds, aes(x = observation_date, fill = common_name, color = common_name)) +
-  geom_density(alpha = .2)
-
-# as a ridgeplot
-ggplot(Allbirds_ME, aes(x = observation_date, y = common_name, fill = common_name, color = common_name)) + 
-  geom_density_ridges(alpha = .8) 
-
-
-```

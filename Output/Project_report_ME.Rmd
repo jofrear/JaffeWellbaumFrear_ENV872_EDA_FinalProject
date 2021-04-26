@@ -56,8 +56,6 @@ WODU_ME_month <- read.csv("../Data/Processed/Maine/WODU_ME_month.csv")
 RWBL_ME_month <- read.csv("../Data/Processed/Maine/RWBL_ME_month.csv")
 Allbirds_ME <- read.csv("../Data/Processed/Maine/Allbirds_ME.csv")
 Allbirds_ME$observation_date <- as.Date(Allbirds_ME$observation_date)
-
-
 OSPR_ME_month$Month_Year <- as.Date(OSPR_ME_month$Month_Year)
 WODU_ME_month$Month_Year <- as.Date(WODU_ME_month$Month_Year)
 RWBL_ME_month$Month_Year <- as.Date(RWBL_ME_month$Month_Year)
@@ -65,11 +63,6 @@ RWBL_ME_month$Month_Year <- as.Date(RWBL_ME_month$Month_Year)
 ME_birds_temps <- read.csv("../Data/Processed/Maine/ME_birds_temps.csv")
 str(ME_birds_temps)
 ME_birds_temps$Month_Year <- as.Date(ME_birds_temps$Month_Year)
-
-
-OSPR_ME_firstlast <- read.csv("../Data/Processed/Maine/OSPR_ME_firstlast.csv")
-WODU_ME_firstlast <- read.csv("../Data/Processed/Maine/WODU_ME_firstlast.csv")
-RWBL_ME_firstlast <- read.csv("../Data/Processed/Maine/RWBL_ME_firstlast.csv")
 ```
 
 
