@@ -140,59 +140,65 @@ ggplot(ME_birds_temps,
 
 Two approaches were taken towards analyzing whether there has a been a shift in abundance over the study period. The simpler but cruder approach is to use a linear model with the month of observation as a continuous variable. When examined this way, Of the three species, only Wood Ducks showed a statistically significant change in observations per minute across the study period (slope = 1.289e-05, R^2 = 0.04, p < 0.05). This small shift in abundance for Wood Ducks may indicate increasing abundance, but it does not explain the variance in the data, likely because seasonal migration patterns are dominant. 
 
-The second approach is to construct a time series analysis for the observations.
+The second approach is to construct a time series analysis for the observations. According to the time series analysis, each of the species showed both a strong seasonal component in observations, and a rising monotonic trend across the study period in Maine, according to the seasonal Mann-Kendall test (Osprey: tau = 0.389, p < 0.001, Wood Duck: tau = 0.269, p < 0.001, Red-Winged Blackbird: tau = 0.335, p < 0.001). This rising trend may be due to increasing abundance of these species, but it may also be due to several confounding factors, including variability in observations by birders (e.g. location, time of day, or increasing expertise).
 
-
+Each of the species had an influx of observations associated with spring migration (Febuary-April). Wood Ducks and Red-Winged Blackbird seasonal trends revealed two spikes, suggesting that most spring and fall observations are not from summer residents, but from migrating individuals from out-of-state. Osprey observations, on the other hand, had a relatively constant seasonal component for summer and fall. 
+ 
 ```{r Time.Series}
-#Osprey
+#Osprey Time Series
 OSPR.ts <- ts(OSPR_ME_month$observation_per_min_avg, 
                              start = c(2010,1), frequency = 12)
 
 OSPR.ts.decomposed <- stl(OSPR.ts, s.window = "periodic")
 # Visualize the decomposed series. 
-plot(OSPR.ts.decomposed)
+plot(OSPR.ts.decomposed, main = "Maine Osprey Time Series")
 
-monthly_OSPR_trend <- Kendall::SeasonalMannKendall(OSPR.ts)
-summary(monthly_OSPR_trend)
+#Red-winged Blackbird Time Series
+#remove outlier, interpolate
+RWBL_ME_month$observation_per_min_avg[RWBL_ME_month$observation_per_min_avg > 3] <- NA
 
-OSPR.ts.components <- as.data.frame(OSPR.ts.decomposed$time.series[,1:3])
-
-
-#Red-winged Blackbird
+RWBL_ME_month <- 
+  RWBL_ME_month %>% 
+  mutate(observation_per_min_avg = zoo::na.approx(observation_per_min_avg))
 
 RWBL.ts <- ts(RWBL_ME_month$observation_per_min_avg, 
                              start = c(2010,1), frequency = 12)
 
 RWBL.ts.decomposed <- stl(RWBL.ts, s.window = "periodic")
 # Visualize the decomposed series. 
-plot(RWBL.ts.decomposed)
-
-monthly_RWBL_trend <- Kendall::SeasonalMannKendall(RWBL.ts)
-summary(monthly_RWBL_trend)
-
-RWBL.ts.components <- as.data.frame(RWBL.ts.decomposed$time.series[,1:3])
+plot(RWBL.ts.decomposed, main = "Maine Red-Winged Blackbird Time Series")
 
 ## Wood Duck
-
 WODU.ts <- ts(WODU_ME_month$observation_per_min_avg, 
                              start = c(2010,1), frequency = 12)
-
 WODU.ts.decomposed <- stl(WODU.ts, s.window = "periodic")
 # Visualize the decomposed series. 
-plot(WODU.ts.decomposed)
+plot(WODU.ts.decomposed, main = "Maine Wood Duck Time Series")
+
+## Create a table of the time-series data
+monthly_OSPR_trend <- Kendall::SeasonalMannKendall(OSPR.ts)
+#summary(monthly_OSPR_trend)
+OSPR.ts.components <- as.data.frame(OSPR.ts.decomposed$time.series[,1:3])
 
 monthly_WODU_trend <- Kendall::SeasonalMannKendall(WODU.ts)
-summary(monthly_WODU_trend)
-
+#summary(monthly_WODU_trend)
 WODU.ts.components <- as.data.frame(WODU.ts.decomposed$time.series[,1:3])
-``` 
 
+monthly_RWBL_trend <- Kendall::SeasonalMannKendall(RWBL.ts)
+#summary(monthly_RWBL_trend)
+RWBL.ts.components <- as.data.frame(RWBL.ts.decomposed$time.series[,1:3])
+
+```
 
 
 ## Question 1: <insert specific question here and add additional subsections for additional questions below, if needed>
 
 ## Question 2: 
 
+(NB - I don't know if this fits but I thought it was interesting! Please feel free to not include it.)
+Are non-migratory populations of a species establishing themselves in regions that formerly only had migratory populations of that species? The first step towards answering this question would be the identification of overwintering individuals - that is, observations of individuals during the time that migratory populations should be absent from the region, typically December and January. In Maine, we see observations of Red-Winged Blackbirds during all months, indicating that there is a resident population, despite the migratory behavior and strong seasonal trend. Ospreys are completely absent from Maine for the winter months, with the latest observations in the 2nd week of November, and the earliest observations at the end of March
+Wood Ducks, however, present a possible trend. The first 5 winters had gaps between 33 and 86 days during which no Wood Ducks were observed in Maine. Beginning in the 2015-2016 winter, the observations gaps disappeared, with individuals seen on both in the last week of Decemeber, and first week of January. A small gap did reappear in the last two winters, with periods of 27 and 13 days in which no individuals were observed. 
+This data suggests that either birders in Maine are discovering wintering Wood Ducks that they previously overlooked, or that Wood Ducks are responding to climate shifts that make certain locations in Maine suitable wintering habitat. More observations are needed to explore this trend.
 
 
 
@@ -200,6 +206,7 @@ WODU.ts.components <- as.data.frame(WODU.ts.decomposed$time.series[,1:3])
 
 # Summary and Conclusions
 
+We expect to see significant shifts in bird distribution and abundance as temperatures rise over this century, particularly in species like Osprey (Pandion haliaetus) that have both migratory and resident populations. Populations in regions that are currently migratory (like those in Massachusetts and Maine) may become year-round residential populations if the climate facilitates this. The study period of ten years does not reveal any shifts in seasonality. The first indicators of a shift like this will likely come in changes to "first-of-year" sightings, which are worth monitoring. Migratory species that are unable to adapt to climate shifts will likely face strong inter-specific competition from non-migratory species.
 
 \newpage
 
