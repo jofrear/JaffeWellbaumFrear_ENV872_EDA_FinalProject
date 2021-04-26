@@ -117,7 +117,9 @@ Allbirds_ME <- bind_rows(OSPR_ME_ebd, WODU_ME_ebd, RWBL_ME_ebd)
 
 write.csv(Allbirds_ME, file = "../Data/Processed/Maine/Allbirds_ME.csv")
 ```
-Next, we load Temperature data for Maine from a file obtained from NOAA
+
+Next, we load Temperature data for Maine from a file obtained from NOAA.
+
 ```{r Temperature.Data}
 #Load temp data from NOAA
 Maine_Temps <- read.csv("../Data/Raw/Maine/MaineTemperature20102021.csv")
@@ -154,9 +156,21 @@ WODU_ME_month$state = "Maine"
 WODU_ME_month[is.na(WODU_ME_month)] <- 0
 WODU_ME_month$obs_per_min_log10 <- log10(WODU_ME_month$observation_per_min_avg)
 
-allBirds_month_temps <- bind_rows(OSPR_ME_month, RWBL_ME_month, WODU_ME_month)
+ME_Birds_temps <- bind_rows(OSPR_ME_month, RWBL_ME_month, WODU_ME_month)
+
+ME_Birds_temps <- ME_Birds_temps %>% 
+  mutate(Month = month(Month_Year),
+         Year = year(Month_Year))
+
+#Create a numeric "Season" column based on Month and the meteorological seasons
+ME_Birds_temps$Season[ME_Birds_temps$Month %in% c(1,2,12)] <- 1 #Winter
+ME_Birds_temps$Season[ME_Birds_temps$Month %in% c(3:5)] <- 2 #Spring
+ME_Birds_temps$Season[ME_Birds_temps$Month %in% c(6:8)] <- 3 #Summer
+ME_Birds_temps$Season[ME_Birds_temps$Month %in% c(9:11)] <- 4 #Fall
+
 
 #write csv files to project folder
+write.csv(ME_Birds_temps, file = "../Data/Processed/Maine/ME_birds_temps.csv")
 write.csv(OSPR_ME_month, file = "../Data/Processed/Maine/OSPR_ME_month.csv")
 write.csv(WODU_ME_month, file = "../Data/Processed/Maine/WODU_ME_month.csv")
 write.csv(RWBL_ME_month, file = "../Data/Processed/Maine/RWBL_ME_month.csv")
