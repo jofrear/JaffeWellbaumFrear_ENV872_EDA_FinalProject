@@ -1,0 +1,207 @@
+---
+output: 
+  pdf_document:
+    keep_tex: yes
+    fig_caption: yes
+    number_sections: yes
+geometry: margin=2.54cm
+title: "Migratory shifts in bird abundance along Atlantic Flyway"
+subtitle: "https://github.com/jofrear/JaffeWellbaumFrear_ENV872_EDA_FinalProject"
+author: "Cate Jaffe, Emma Wellbaum, Joshua Frear"
+fontsize: 12pt
+mainfont: Times New Roman
+---
+
+\newpage
+\tableofcontents 
+\newpage
+\listoftables 
+\newpage
+\listoffigures 
+\newpage
+
+```{r setup, include=FALSE}
+# Set working directory
+knitr::opts_knit$set(root.dir = 
+                        "D:/JaffeWellbaumFrear_ENV872_EDA_FinalProject",
+                  tidy.opts = list(width.cutoff = 60),
+                  tidy = TRUE)
+getwd()
+
+# Load packages
+library(tidyverse)
+library(ggplot2)
+library(auk)
+library(agricolae)
+library(lubridate)
+library(colormap)
+library(ggridges)
+library(RColorBrewer)
+library(corrplot)
+
+# Set ggplot theme
+mytheme <- theme_light( base_size = 14) + 
+  theme( axis.text = element_text( color = "#222222ff"),
+         legend.position = "top",
+         # margins (top,right,bottom,left)
+         axis.title.x = element_text( color = "black",
+                                    margin = margin(20,0,0,0)),
+         axis.title.y = element_text( color = "black",
+                                    margin = margin(0,20,0,0)))
+theme_set(mytheme)
+
+# Load datasets
+OSPR_ME_month <- read.csv("../Data/Processed/Maine/OSPR_ME_month.csv")
+WODU_ME_month <- read.csv("../Data/Processed/Maine/WODU_ME_month.csv")
+RWBL_ME_month <- read.csv("../Data/Processed/Maine/RWBL_ME_month.csv")
+Allbirds_ME <- read.csv("../Data/Processed/Maine/Allbirds_ME.csv")
+Allbirds_ME$observation_date <- as.Date(Allbirds_ME$observation_date)
+
+
+OSPR_ME_month$Month_Year <- as.Date(OSPR_ME_month$Month_Year)
+WODU_ME_month$Month_Year <- as.Date(WODU_ME_month$Month_Year)
+RWBL_ME_month$Month_Year <- as.Date(RWBL_ME_month$Month_Year)
+
+ME_birds_temps <- read.csv("../Data/Processed/Maine/ME_birds_temps.csv")
+str(ME_birds_temps)
+ME_birds_temps$Month_Year <- as.Date(ME_birds_temps$Month_Year)
+
+
+OSPR_ME_firstlast <- read.csv("../Data/Processed/Maine/OSPR_ME_firstlast.csv")
+WODU_ME_firstlast <- read.csv("../Data/Processed/Maine/WODU_ME_firstlast.csv")
+RWBL_ME_firstlast <- read.csv("../Data/Processed/Maine/RWBL_ME_firstlast.csv")
+```
+
+
+# Rationale and Research Questions
+
+Bird presence and abundance shifts seasonally for many species in the US. We wanted to investigate these shifts, both within a year, and across years, and compare it with temperature data. To do this, we analyzed citizen-science observations from Ebird of three key bird species: Pandion haliaetus (Osprey), Aix sponsa (Wood Duck), and Agelaius phoeniceus (Red-Winged Blackbird). These species from different orders were selected based on news reports and published papers that suggested recent shifts in abundance and range. 
+
+\newpage
+
+# Dataset Information
+
+Bird observation data was downloaded from the Cornell Lab of Orinthology eBird Database (https://ebird.org/). Data was obtained for the three target species in three states along the Atlantic migratory Flyway: Maine, Massachusetts, and North Carolina. All observations uploaded to ebird and marked with an observation date between January 2010 and March 2021 were used. Citizen science observers using ebird enter the bird species seen and numbers observed for each species, and can optionally track their effort in birding by including distance traveled during a trip (which can be manually entered or derived from smartphone gps data) and time spent observing.
+
+\newpage
+
+# Exploratory Analysis 
+
+It became clear that observations dataset had generally increasing observations year-over-year, regardless of species. This is possibly attributable to increasing ebird use in the US, especially as smartphone adoption increased over the last decade, providing an electronic alternative to pen-and-paper notations of field observations. [Figure 1]
+
+To adjust for this trend, we used the reported time spent observing birds on each checklist to create a value of observed birds per minute. The distribution of birds observed per minute was non-normal, but log-transforming the data revealed a roughly normal distribution. 
+
+```{r visualize.distribution}
+ggplot(Allbirds_ME, aes(x=observations_per_min)) + 
+  geom_density() 
+ggplot(Allbirds_ME, aes(x=log10(observations_per_min))) + 
+  geom_density() 
+```
+
+```{r density.plot}
+#Create a basic density plot for all species across the entire date range
+#This plot represents bird observations uncorrected for effort
+ggplot(Allbirds_ME, aes(x = observation_date, fill = common_name, color = common_name)) +
+  geom_density(alpha = .2) + 
+  facet_wrap(~common_name, ncol = 3) + 
+  theme(legend.position = 'none',
+         axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  #Set color and fill
+  scale_color_brewer( palette = 'Dark2') + 
+  scale_fill_brewer( palette = 'Dark2') + 
+  #Create figure labels
+  labs(x = "Observation Date", title="Bird Observation Density by Species",
+       subtitle = "Maine: 2010:2020")
+```
+
+
+``` {r monthly.log.effor}
+ggplot(ME_birds_temps, 
+       aes(x=Month_Year, y=log10(observation_per_min_avg), color=Mean_Temperature)) +
+  geom_line(lwd=0.8) +
+  #Set color to average monthly temperature
+  scale_color_viridis(option='plasma') +
+  #Create legible date break labels
+  scale_x_date(date_breaks = '1 year', date_labels = '%Y') +
+  #Create figure labels
+  labs(x='Observation Date', 
+       y='Average Observations/Minute (log10)', 
+       color='Mean Monthly Temperature (F)', 
+       title= 'Effort-Corrected Bird Observations by Species', 
+       subtitle = 'Maine: 2010-2020') +
+  #Facet by species
+  facet_wrap(~common_name, nrow=3)
+```
+
+
+\newpage
+
+# Analysis
+
+Two approaches were taken towards analyzing whether there has a been a shift in abundance over the study period. The simpler but cruder approach is to use a linear model with the month of observation as a continuous variable. When examined this way, Of the three species, only Wood Ducks showed a statistically significant change in observations per minute across the study period (slope = 1.289e-05, R^2 = 0.04, p < 0.05). This small shift in abundance for Wood Ducks may indicate increasing abundance, but it does not explain the variance in the data, likely because seasonal migration patterns are dominant. 
+
+The second approach is to construct a time series analysis for the observations.
+
+
+```{r Time.Series}
+#Osprey
+OSPR.ts <- ts(OSPR_ME_month$observation_per_min_avg, 
+                             start = c(2010,1), frequency = 12)
+
+OSPR.ts.decomposed <- stl(OSPR.ts, s.window = "periodic")
+# Visualize the decomposed series. 
+plot(OSPR.ts.decomposed)
+
+monthly_OSPR_trend <- Kendall::SeasonalMannKendall(OSPR.ts)
+summary(monthly_OSPR_trend)
+
+OSPR.ts.components <- as.data.frame(OSPR.ts.decomposed$time.series[,1:3])
+
+
+#Red-winged Blackbird
+
+RWBL.ts <- ts(RWBL_ME_month$observation_per_min_avg, 
+                             start = c(2010,1), frequency = 12)
+
+RWBL.ts.decomposed <- stl(RWBL.ts, s.window = "periodic")
+# Visualize the decomposed series. 
+plot(RWBL.ts.decomposed)
+
+monthly_RWBL_trend <- Kendall::SeasonalMannKendall(RWBL.ts)
+summary(monthly_RWBL_trend)
+
+RWBL.ts.components <- as.data.frame(RWBL.ts.decomposed$time.series[,1:3])
+
+## Wood Duck
+
+WODU.ts <- ts(WODU_ME_month$observation_per_min_avg, 
+                             start = c(2010,1), frequency = 12)
+
+WODU.ts.decomposed <- stl(WODU.ts, s.window = "periodic")
+# Visualize the decomposed series. 
+plot(WODU.ts.decomposed)
+
+monthly_WODU_trend <- Kendall::SeasonalMannKendall(WODU.ts)
+summary(monthly_WODU_trend)
+
+WODU.ts.components <- as.data.frame(WODU.ts.decomposed$time.series[,1:3])
+``` 
+
+
+
+## Question 1: <insert specific question here and add additional subsections for additional questions below, if needed>
+
+## Question 2: 
+
+
+
+
+\newpage
+
+# Summary and Conclusions
+
+
+\newpage
+
+# References
+<add references here if relevant, otherwise delete this section> 
