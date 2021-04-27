@@ -10,12 +10,15 @@ editor_options:
 ## Set up
 
 ```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+
 # set working directory for knitting
 knitr::opts_knit$set( root.dir = 
   #"/Users/Kate/Documents/1.Spring 2021/JaffeWellbaumFrear_ENV872_EDA_FinalProject",
     "/Users/emmaw/Documents/ENV872/JaffeWellbaumFrear_ENV872_EDA_FinalProject",
                   tidy.opts = list(width.cutoff = 60),
-                  tidy = TRUE, echo=TRUE, message=FALSE, warning=FALSE)
+                  tidy = TRUE)
 getwd()
 
 #install.packages("auk")
