@@ -3,27 +3,18 @@ output:
   pdf_document:
     keep_tex: yes
     fig_caption: yes
-    number_sections: yes
 geometry: margin=2.54cm
-title: "Migratory shifts in bird abundance along Atlantic Flyway"
+title: "Migratory Shifts in Bird Species Abundance along the Atlantic Flyway"
 subtitle: "https://github.com/jofrear/JaffeWellbaumFrear_ENV872_EDA_FinalProject"
 author: "Cate Jaffe, Emma Wellbaum, Joshua Frear"
 fontsize: 12pt
 mainfont: Times New Roman
 ---
 
-\newpage
-\tableofcontents 
-\newpage
-\listoftables 
-\newpage
-\listoffigures 
-\newpage
-
 ```{r setup, include=FALSE}
 # Set working directory
 knitr::opts_knit$set(root.dir = 
-                        "D:/JaffeWellbaumFrear_ENV872_EDA_FinalProject",
+                        "/Users/Kate/Documents/1.Spring 2021/JaffeWellbaumFrear_ENV872_EDA_FinalProject",
                   tidy.opts = list(width.cutoff = 60),
                   tidy = TRUE)
 getwd()
@@ -67,9 +58,27 @@ ME_birds_temps$Month_Year <- as.Date(ME_birds_temps$Month_Year)
 ```
 
 
-# Rationale and Research Questions
+# Table of Contents
+* Introduction and Study Rational
+* Research Questions
+* Dataset Information
+* Analysis
+  + Maine
+  + Massachusetts
+  + North Carolina
 
-Bird presence and abundance shifts seasonally for many species in the US. We wanted to investigate these shifts, both within a year, and across years, and compare it with temperature data. To do this, we analyzed citizen-science observations from Ebird of three key bird species: Pandion haliaetus (Osprey), Aix sponsa (Wood Duck), and Agelaius phoeniceus (Red-Winged Blackbird). These species from different orders were selected based on news reports and published papers that suggested recent shifts in abundance and range. 
+
+\newpage
+
+
+# Introduction and Study Rational
+
+Bird presence and abundance shifts seasonally for many species in the U.S. We wanted to investigate these shifts, both within a year and across years, and compare these shifts to changes in temperature. The Atlantic Flyway, which crosses every state along the eastern U.S. coast, is a major pathway for seasonal avaian migrations and thus an excellent place to observation potential shifts in species populations. To conduct our analysius we obtained and analyzed bird observations from ebird, a citizen science driven database of avain observations published and maintained by the Cornell Lab of Ornithology. We acquired observation data of three key bird species: Pandion haliaetus (Osprey), Aix sponsa (Wood Duck), and Agelaius phoeniceus (Red-Winged Blackbird). These species from different orders were selected based on news reports and published papers that suggested recent shifts in abundance and range. To further refine our analysis we limited our analysis to three states which together covered a wide north-to-south range of the Atlantic Flyway: Maine, Massachusetts, and North Carolina. 
+
+# Overall Research Questions:
+1. Are seasonal shifts in temperature affecting bird abundance?
+2. Are bird migration patterns changing?
+
 
 \newpage
 
@@ -77,9 +86,14 @@ Bird presence and abundance shifts seasonally for many species in the US. We wan
 
 Bird observation data was downloaded from the Cornell Lab of Orinthology eBird Database (https://ebird.org/). Data was obtained for the three target species in three states along the Atlantic migratory Flyway: Maine, Massachusetts, and North Carolina. All observations uploaded to ebird and marked with an observation date between January 2010 and March 2021 were used. Citizen science observers using ebird enter the bird species seen and numbers observed for each species, and can optionally track their effort in birding by including distance traveled during a trip (which can be manually entered or derived from smartphone gps data) and time spent observing.
 
-\newpage
+Temperature data was obtained from the National Centers for Environmental Information Global Historical Climate Network Daily dataset. The GHCN-Daily contains daily climate summaries, including minimum and maximum temperature, from land surface stations across the world. Data was downloaded via the National Atmospheric and Oceanic Administration API using the rnoaa package and a NOAA API token. The source code used to extract and pre-process the data is located in the project repository file: './Code/TemperatureAPI.Rmd'
 
-# Exploratory Analysis 
+\newpage
+****
+# Maine
+# Section Author: Joshua Frear
+
+## Exploratory Analysis 
 
 It became clear that observations dataset had generally increasing observations year-over-year, regardless of species (Figure 1). This is possibly attributable to increasing ebird use in the US, especially as smartphone adoption increased over the last decade, providing an electronic alternative to pen-and-paper notations of field observations.
 
@@ -123,7 +137,7 @@ ggplot(ME_birds_temps,
 
 \newpage
 
-# Analysis
+## Analysis
 
 Two approaches were taken towards analyzing whether there has a been a shift in abundance over the study period. The simpler but cruder approach is to use a linear model with the month of observation as a continuous variable. When examined this way, Of the three species, only Wood Ducks showed a statistically significant change in observations per minute across the study period (slope = 1.289e-05, R^2 = 0.04, p < 0.05). This small shift in abundance for Wood Ducks may indicate increasing abundance, but it does not explain the variance in the data, likely because seasonal migration patterns are dominant. 
 

@@ -1,8 +1,14 @@
 ---
-title: "Massachusetts_Analysis"
+output: 
+  pdf_document:
+    keep_tex: yes
+    fig_caption: yes
+geometry: margin=2.54cm
+title: "Massachusetts"
 author: "Emma Wellbaum"
 date: "4/22/2021"
-output: pdf_document
+fontsize: 12pt
+mainfont: Times New Roman
 editor_options:
   chunk_output_type: console
 ---

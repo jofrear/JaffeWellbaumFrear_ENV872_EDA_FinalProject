@@ -39,7 +39,7 @@
 \IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
 \IfFileExists{bookmark.sty}{\usepackage{bookmark}}{\usepackage{hyperref}}
 \hypersetup{
-  pdftitle={Migratory shifts in bird abundance along Atlantic Flyway},
+  pdftitle={Migratory Shifts in Bird Species Abundance along the Atlantic Flyway},
   pdfauthor={Cate Jaffe, Emma Wellbaum, Joshua Frear},
   hidelinks,
   pdfcreator={LaTeX via pandoc}}
@@ -61,12 +61,13 @@
 \setlength{\emergencystretch}{3em} % prevent overfull lines
 \providecommand{\tightlist}{%
   \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
-\setcounter{secnumdepth}{5}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
 \ifluatex
   \usepackage{selnolig}  % disable illegal ligatures
 \fi
 
-\title{Migratory shifts in bird abundance along Atlantic Flyway}
+\title{Migratory Shifts in Bird Species Abundance along the Atlantic
+Flyway}
 \usepackage{etoolbox}
 \makeatletter
 \providecommand{\subtitle}[1]{% add subtitle to \maketitle
@@ -80,26 +81,65 @@
 \begin{document}
 \maketitle
 
-\newpage
-\tableofcontents 
-\newpage
-\listoftables 
-\newpage
-\listoffigures 
+\hypertarget{table-of-contents}{%
+\section{Table of Contents}\label{table-of-contents}}
+
+\begin{itemize}
+\tightlist
+\item
+  Introduction and Study Rational
+\item
+  Research Questions
+\item
+  Dataset Information
+\item
+  Analysis
+
+  \begin{itemize}
+  \tightlist
+  \item
+    Maine
+  \item
+    Massachusetts
+  \item
+    North Carolina
+  \end{itemize}
+\end{itemize}
+
 \newpage
 
-\hypertarget{rationale-and-research-questions}{%
-\section{Rationale and Research
-Questions}\label{rationale-and-research-questions}}
+\hypertarget{introduction-and-study-rational}{%
+\section{Introduction and Study
+Rational}\label{introduction-and-study-rational}}
 
 Bird presence and abundance shifts seasonally for many species in the
-US. We wanted to investigate these shifts, both within a year, and
-across years, and compare it with temperature data. To do this, we
-analyzed citizen-science observations from Ebird of three key bird
-species: Pandion haliaetus (Osprey), Aix sponsa (Wood Duck), and
-Agelaius phoeniceus (Red-Winged Blackbird). These species from different
-orders were selected based on news reports and published papers that
-suggested recent shifts in abundance and range.
+U.S. We wanted to investigate these shifts, both within a year and
+across years, and compare these shifts to changes in temperature. The
+Atlantic Flyway, which crosses every state along the eastern U.S. coast,
+is a major pathway for seasonal avaian migrations and thus an excellent
+place to observation potential shifts in species populations. To conduct
+our analysius we obtained and analyzed bird observations from ebird, a
+citizen science driven database of avain observations published and
+maintained by the Cornell Lab of Ornithology. We acquired observation
+data of three key bird species: Pandion haliaetus (Osprey), Aix sponsa
+(Wood Duck), and Agelaius phoeniceus (Red-Winged Blackbird). These
+species from different orders were selected based on news reports and
+published papers that suggested recent shifts in abundance and range. To
+further refine our analysis we limited our analysis to three states
+which together covered a wide north-to-south range of the Atlantic
+Flyway: Maine, Massachusetts, and North Carolina.
+
+\hypertarget{overall-research-questions}{%
+\section{Overall Research Questions:}\label{overall-research-questions}}
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  Are seasonal shifts in temperature affecting bird abundance?
+\item
+  Are bird migration patterns changing?
+\end{enumerate}
 
 \newpage
 
@@ -117,10 +157,28 @@ can optionally track their effort in birding by including distance
 traveled during a trip (which can be manually entered or derived from
 smartphone gps data) and time spent observing.
 
+Temperature data was obtained from the National Centers for
+Environmental Information Global Historical Climate Network Daily
+dataset. The GHCN-Daily contains daily climate summaries, including
+minimum and maximum temperature, from land surface stations across the
+world. Data was downloaded via the National Atmospheric and Oceanic
+Administration API using the rnoaa package and a NOAA API token. The
+source code used to extract and pre-process the data is located in the
+project repository file: `./Code/TemperatureAPI.Rmd'
+
 \newpage
 
+\begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
+
+\hypertarget{maine}{%
+\section{Maine}\label{maine}}
+
+\hypertarget{section-author-joshua-frear}{%
+\section{Section Author: Joshua
+Frear}\label{section-author-joshua-frear}}
+
 \hypertarget{exploratory-analysis}{%
-\section{Exploratory Analysis}\label{exploratory-analysis}}
+\subsection{Exploratory Analysis}\label{exploratory-analysis}}
 
 It became clear that observations dataset had generally increasing
 observations year-over-year, regardless of species (Figure 1). This is
@@ -150,7 +208,7 @@ minute of observation and log-transformed.}
 \newpage
 
 \hypertarget{analysis}{%
-\section{Analysis}\label{analysis}}
+\subsection{Analysis}\label{analysis}}
 
 Two approaches were taken towards analyzing whether there has a been a
 shift in abundance over the study period. The simpler but cruder

@@ -1,12 +1,20 @@
 ---
-title: "Data Analytics Final Project"
-subtitle: "An Analysis of Trends in Bird Obervations and Temperature in North Carolina, 2010-2020"
+output: 
+  pdf_document:
+    keep_tex: yes
+    fig_caption: yes
+geometry: margin=2.54cm
+title: "North Carolina"
 author: "Cate Jaffe"
 date: "4/26/2021"
-output: pdf_document
+fontsize: 12pt
+mainfont: Times New Roman
 editor_options:
   chunk_output_type: console
 ---
+
+
+
 
 ## Setup
 ```{r setup, message=FALSE, warning=FALSE}
@@ -61,7 +69,7 @@ temp <- read.csv("./Data/Raw/NorthCarolina/NCTemperature20102021.csv") %>% uniqu
 ```
 
 ### Data Cleaning
-```{r bird data clean, echo=TRUE, message=FALSE, warning=FALSE, fig.cap = "A comparison of Bird observations, raw data (left) and log transformed (right). Log transformed data have a more normal distribution"}
+```{r bird data clean, echo=FALSE, fig.cap="A comparison of Bird observations, raw data (left) and log transformed (right). Log transformed data have a more normal distribution", message=FALSE, warning=FALSE}
 
 ### create merged dataset of all bird data
 allBirds <- bind_rows(woodduck, rwbbird, osprey)
@@ -145,7 +153,7 @@ temp_YM <- temp %>%
 ```
 
 ## Data Exploration
-```{r bird exploratory plots, fig.cap="The top plot is raw bird observation data, the bottom plot is observations per minute of observation.", fig.height=8,  fig.width = 8}
+```{r bird exploratory plots, echo=FALSE, fig.cap="The top plot is raw bird observation data the bottom plot is observations per minute of observation", fig.height=8}
 
 ### Birds, ungrouped, uncorrected for effort
 # basic density plot across all years, faceted 
@@ -431,10 +439,10 @@ ggplot(allBirds_week, aes(x=month(Week), y=log10(observation_count_sum), color=c
 
 ```
 
-### Discussion of Seasonal Stays by each species
-> All birds appear to reside in North Carolina year round (Figure 2). Osprey appear most populus in the summer months and least populus in the winter, with populations potentially increasing overtime between 2010 and 2020. The opposite pattern appears to be true for Blackbird, which is more abundant in the summers and less in the winters, and is generally the most populus of the three birds examined here. Wood Duck appears from this plot to be least seasonal, and to be present in constant numbers (at State scale) throughout the year. 
+### Discussion of Bird Observations and Temperature Relationship
+> All birds appear to reside in North Carolina year round (Figure 2, Figure 5). Osprey appear most populus in the summer months and least populus in the winter, with populations potentially increasing overtime between 2010 and 2020. The opposite pattern appears to be true for Blackbird, which is more abundant in the summers and less in the winters, and is generally the most populus of the three birds examined here. Wood Duck appears from this plot to be least seasonal, and to be present in constant numbers (at state scale) throughout the year. 
 
-> To further investigate seasonal and long-term (2010-2020) trends, we conducted a time-series analysis:
+> To further investigate seasonal *and* long-term (2010-2020) trends in bird observations, we conducted a time-series analysis:
 
 **** 
 ## Analysis: Time Series
@@ -480,7 +488,7 @@ summary(monthly_wodu_trend)
 ```
 
 
-```{r Time Series Plots, echo=TRUE, message = FALSE, warning=FALSE}
+```{r Time Series Plots, echo=FALSE, message = FALSE, warning=FALSE}
 
 # plot time series 
 
@@ -496,8 +504,7 @@ plot(wodu.ts.decomposed)
 
 ## Discussion of Time Series Results:
 
-
-
+> All three birds have an apparent seasonal trend in obervations. With the seasonal variation in the data removed, Osprey populations tend to generally increase in abundance (upwards monotonic trend) between 2010 and 2020 (p < .001). Red-winged Blackbird have notable spikes in population in 2012 and 2014, but appear to  sharply decrease in overall abundance in 2015 and remain remain fairly constant in number from 2016 forward. Overall, there appears to be a downward trend in Red-Winged Blackbird observations in NC (p < .001). Wood Duck observations in North Carolina were elevated between 2014 and 2017, but sharply decrease in 2017-2018. Overall, Wood Duck observations have increased between 2010 and 2020 (p < .001), but this trend is less pronouned than the Blackbird and Osprey trends. 
 
 ```{r color ref, eval=FALSE, include=FALSE}
 
@@ -508,8 +515,6 @@ display.brewer.all()
 scales::show_col(colormap(colormap = colormaps$portland, n = 36))
 
 ```
-
-
 
 
 
