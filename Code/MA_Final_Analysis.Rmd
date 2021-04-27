@@ -2,7 +2,7 @@
 title: "Massachusetts_Analysis"
 author: "Emma Wellbaum"
 date: "4/22/2021"
-output: html_document
+output: pdf_document
 editor_options:
   chunk_output_type: console
 ---
@@ -36,7 +36,7 @@ theme_set(mytheme)
 # Import state temperature data, downloaded from the National Atmospheric and
 # Oceanic Administration using the rnoaa package
 # The source code used to download and pre-process the temperature data is
-MA_temp <- read.csv('./Data/Raw/Massachusetts/MassTemperature20102021.csv') %>% unique()
+MA_temp <- read.csv('../Data/Raw/Massachusetts/MassTemperature20102021.csv') %>% unique()
 
 # Summarize monthly temperature data for the entire state
 MA_temp <- MA_temp %>%

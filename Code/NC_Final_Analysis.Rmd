@@ -393,9 +393,8 @@ ggplot(birdsTemp_season,
 ```
 
 \newpage
-## Analysis: Date of First and Last Annual Observations
 
-```{r Visualize first and last observation dates, echo=TRUE, fig.cap="Seasonal Stays of Birds in North Carolina", message=FALSE, warning=FALSE, fig.height=8, fig.width=10}
+```{r Visualize first and last observation dates, eval=FALSE, fig.cap="Seasonal Stays of Birds in North Carolina", fig.height=8, fig.width=10, message=FALSE, warning=FALSE, include=FALSE}
 
 allBirdsTemp <- full_join(allBirds, temp_YM, 
                              by = "Year_Month")
@@ -433,7 +432,7 @@ ggplot(allBirds_week, aes(x=month(Week), y=log10(observation_count_sum), color=c
 ```
 
 ### Discussion of Seasonal Stays by each species
-> All birds appear to reside in North Carolina year round. Osprey appear most populus in the summer months and almost absent in the winter, with populations potentially increasing overtime between 2010 and 2020. The opposite pattern appears to be true for Blackbird, which is more abundant in the summers and less in the winters, and is generally the most populus of the three birds examined here. Wood Duck appears from this plot to be least seaonsal, and to be present in constant numbers (at State scale) throughout the year. 
+> All birds appear to reside in North Carolina year round (Figure 2). Osprey appear most populus in the summer months and least populus in the winter, with populations potentially increasing overtime between 2010 and 2020. The opposite pattern appears to be true for Blackbird, which is more abundant in the summers and less in the winters, and is generally the most populus of the three birds examined here. Wood Duck appears from this plot to be least seasonal, and to be present in constant numbers (at State scale) throughout the year. 
 
 > To further investigate seasonal and long-term (2010-2020) trends, we conducted a time-series analysis:
 

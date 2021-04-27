@@ -2,7 +2,7 @@
 title: "Maine_Analysis"
 author: "Joshua Frear"
 date: "4/26/2021"
-output: html_document
+output: pdf_document
 ---
 
 ```{r setup}
@@ -16,6 +16,8 @@ library(colormap)
 library(ggridges)
 library(RColorBrewer)
 library(corrplot)
+library(viridis)
+library(cowplot)
 
 OSPR_ME_month <- read.csv("../Data/Processed/Maine/OSPR_ME_month.csv")
 WODU_ME_month <- read.csv("../Data/Processed/Maine/WODU_ME_month.csv")

@@ -2,7 +2,7 @@
 title: "Maine_Cleaning_Data"
 author: "Joshua Frear"
 date: "4/15/2021"
-output: html_document
+output: pdf_document
 ---
 This file is for taking the downloaded ebird and temperature data and cleaning it, and processing it into files for analyis, which are placed in the "Processed" folder. 
 
